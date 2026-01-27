@@ -1,0 +1,16 @@
+# gralph Progress Log
+
+## Codebase Patterns
+- Constants grouped at module top after imports, before app/console setup
+
+## Learnings
+
+Project: Improve code in this project
+Stack: python
+Started: 2026-01-27T12:36:10.003893
+
+---
+
+## Task 1: Add constants to module top
+- Moved GRALPH_DIR and REQUIRED_TOOLS near __version__ at module top
+- Placed before app/console definitions for better organization
