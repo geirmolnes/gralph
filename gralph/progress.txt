@@ -14,3 +14,8 @@ Started: 2026-01-27T12:36:10.003893
 ## Task 1: Add constants to module top
 - Moved GRALPH_DIR and REQUIRED_TOOLS near __version__ at module top
 - Placed before app/console definitions for better organization
+
+## Task 2: Extract RALPH_SH to external file
+- Created templates/ package with ralph.sh and __init__.py
+- Replaced inline RALPH_SH constant with _load_ralph_sh() function
+- Uses importlib.resources to load from package data
