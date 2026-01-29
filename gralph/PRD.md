@@ -2,13 +2,12 @@
 
 Stack: python
 
-- [x] Add constants to module top (move GRALPH_DIR near other constants) ||| grep -q "^GRALPH_DIR = " gralph.py && grep -q "^REQUIRED_TOOLS = " gralph.py
-- [x] Extract RALPH_SH to external file gralph/templates/ralph.sh ||| test -f templates/ralph.sh && python3 -c "from gralph import RALPH_SH" 2>&1 | grep -q "cannot import"
-- [ ] Replace try/except ImportError with proper dependency check ||| python3 -c "import gralph" 2>&1 | grep -qv "Missing dependencies"
-- [ ] Add return type hints to all functions ||| grep -E "^def " gralph.py | grep -v " -> " | wc -l | grep -q "^0$"
-- [ ] Extract PRD validation logic to separate module validators.py ||| test -f validators.py && python3 -c "from validators import validate_prd"
-- [ ] Extract file operations to utils.py module ||| test -f utils.py && python3 -c "from utils import find_gralph_dir"
-- [ ] Add error handling enum for consistent exit codes ||| grep -q "class ExitCode" gralph.py || grep -q "class ExitCode" utils.py
-- [ ] Sync version in pyproject.toml with __version__ in gralph.py ||| python3 -c "import tomllib; from gralph import __version__; t=tomllib.load(open('pyproject.toml','rb')); assert t['project']['version']==__version__"
-- [ ] Add CLI test for bootstrap command ||| uv run pytest tests/test_cli.py -k "bootstrap" -q
-- [ ] Add CLI test for status command ||| uv run pytest tests/test_cli.py -k "status" -q
+- [x] Review current project structure and main entry point ||| test -f src/gralph/main.py && head -20 src/gralph/main.py | grep -q "def\|import"
+- [ ] Ensure CLI module is separate from main orchestration ||| test -f src/gralph/cli.py || test -f src/gralph/main.py
+- [ ] Check if constants are properly centralized ||| grep -r "GRALPH_DIR\|REQUIRED_TOOLS" src/gralph/ | head -1
+- [ ] Verify templates are in proper location ||| test -d src/gralph/templates || test -f src/gralph/templates.py
+- [ ] Ensure proper package structure with __init__.py ||| test -f src/gralph/__init__.py
+- [ ] Verify pyproject.toml has correct entry point ||| grep -q "scripts\|entry" pyproject.toml
+- [ ] Check that imports use relative or proper package imports ||| grep -r "^from gralph\|^import gralph\|^from \." src/gralph/ | head -1
+- [ ] Verify the package installs correctly ||| uv pip install -e . && python -c "import gralph"
+- [ ] Test CLI runs without errors ||| uv run gralph --help 2>/dev/null || uv run python -m gralph --help

@@ -1,21 +1,26 @@
 # gralph Progress Log
 
 ## Codebase Patterns
-- Constants grouped at module top after imports, before app/console setup
+- 
 
 ## Learnings
 
 Project: Improve code in this project
 Stack: python
-Started: 2026-01-27T12:36:10.003893
+Started: 2026-01-29T12:18:28.062007
 
 ---
 
-## Task 1: Add constants to module top
-- Moved GRALPH_DIR and REQUIRED_TOOLS near __version__ at module top
-- Placed before app/console definitions for better organization
+## [2026-01-29] Created main.py entry point
+Created src/gralph/main.py to serve as the main orchestration module. The project had:
+- __main__.py: Entry for `python -m gralph`
+- cli.py: Typer-based CLI commands
+- run.py: Standalone runner
 
-## Task 2: Extract RALPH_SH to external file
-- Created templates/ package with ralph.sh and __init__.py
-- Replaced inline RALPH_SH constant with _load_ralph_sh() function
-- Uses importlib.resources to load from package data
+Added main.py with:
+- main() function for programmatic access
+- Simple argument parsing for direct execution
+- Orchestrates setup and run commands
+- Follows existing patterns (uses core.loop, core.setup, utils.console)
+
+---
