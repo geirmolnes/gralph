@@ -251,6 +251,7 @@ def stream_claude_docker(
                             full_output.append(text)
                             if completion_promise in text:
                                 found_promise = True
+                    console.print()  # Newline after assistant message
                 
                 elif event_type == "content_block_delta":
                     delta = event.get("delta", {})
@@ -260,6 +261,10 @@ def stream_claude_docker(
                         full_output.append(text)
                         if completion_promise in text:
                             found_promise = True
+                
+                elif event_type == "content_block_stop":
+                    # End of a content block - add newline for readability
+                    console.print()
                 
                 elif event_type == "result":
                     result_text = event.get("result", "")
@@ -273,7 +278,7 @@ def stream_claude_docker(
                 elif event_type == "system":
                     msg = event.get("message", "")
                     if msg:
-                        console.print(f"[dim]{msg}[/dim]")
+                        console.print(f"\n[dim]{msg}[/dim]")
                 
             except json.JSONDecodeError:
                 console.print(line)
