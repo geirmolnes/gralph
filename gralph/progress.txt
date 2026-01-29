@@ -42,3 +42,13 @@ Confirmed that constants are properly centralized in the codebase:
 Both constants are accessible via proper imports and follow Python packaging best practices. GRALPH_DIR is exported at the package level for easy access, while REQUIRED_TOOLS is co-located with the deps module where it's primarily used.
 
 ---
+## [2026-01-29] Verified templates location
+Confirmed that templates are properly organized in src/gralph/templates/ directory:
+- Directory structure: src/gralph/templates/
+- Contains __init__.py for proper Python package structure
+- Contains ralph.sh template file (1695 bytes)
+
+The templates follow Python package conventions with the templates directory properly nested within the gralph package structure, making them accessible via package data mechanisms.
+
+---
+
