@@ -65,6 +65,8 @@ Only when you are truly done, output the completion promise provided in the task
 
 LOOP_PROMPT_TEMPLATE = """@gralph/PRD.md @gralph/progress.txt @gralph/PROMPT.md
 1. Find the highest-priority unchecked task (- [ ]) and implement it.
+   - Adopt a TDD approach: create or update a test case that verifies this task, and ensure it passes.
+   - If TDD is not applicable or too unpractical for the specified task, then you don't have to create a test.
 2. Run the verification command for that task.
 3. If verification passes, mark the task done: change '- [ ]' to '- [x]' in PRD.md.
 4. Append what you learned to progress.txt.
