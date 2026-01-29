@@ -10,4 +10,4 @@ Stack: python
 - [x] Verify pyproject.toml has correct entry point ||| grep -q "scripts\|entry" pyproject.toml
 - [x] Check that imports use relative or proper package imports ||| grep -r "^from gralph\|^import gralph\|^from \." src/gralph/ | head -1
 - [x] Verify the package installs correctly ||| uv pip install -e . && python -c "import gralph"
-- [ ] Test CLI runs without errors ||| uv run gralph --help 2>/dev/null || uv run python -m gralph --help
+- [x] Test CLI runs without errors ||| uv run gralph --help 2>/dev/null || uv run python -m gralph --help
