@@ -8,6 +8,6 @@ Stack: python
 - [x] Verify templates are in proper location ||| test -d src/gralph/templates || test -f src/gralph/templates.py
 - [x] Ensure proper package structure with __init__.py ||| test -f src/gralph/__init__.py
 - [x] Verify pyproject.toml has correct entry point ||| grep -q "scripts\|entry" pyproject.toml
-- [ ] Check that imports use relative or proper package imports ||| grep -r "^from gralph\|^import gralph\|^from \." src/gralph/ | head -1
+- [x] Check that imports use relative or proper package imports ||| grep -r "^from gralph\|^import gralph\|^from \." src/gralph/ | head -1
 - [ ] Verify the package installs correctly ||| uv pip install -e . && python -c "import gralph"
 - [ ] Test CLI runs without errors ||| uv run gralph --help 2>/dev/null || uv run python -m gralph --help

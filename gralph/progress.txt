@@ -72,3 +72,13 @@ Both entry points follow Python packaging standards for console scripts. The con
 
 ---
 
+## [2026-01-29] Verified import patterns
+Confirmed that all imports in the gralph package use proper absolute package imports:
+- All imports follow the pattern "from gralph.module import ..." (e.g., from gralph.core.loop import run_loop)
+- No relative imports (from . or from ..) are used in the codebase
+- This is the recommended approach for installed packages as it ensures imports work correctly regardless of how the package is installed or invoked
+
+The consistent use of absolute package imports (from gralph.*) improves code clarity and prevents import resolution issues that can occur with relative imports in larger projects.
+
+---
+
