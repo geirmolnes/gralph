@@ -33,3 +33,12 @@ Confirmed that CLI module (src/gralph/cli.py) is properly separated from main or
 This separation follows good architectural practices for CLI applications.
 
 ---
+
+## [2026-01-29] Verified constants centralization
+Confirmed that constants are properly centralized in the codebase:
+- GRALPH_DIR: Defined in src/gralph/__init__.py (package level constant)
+- REQUIRED_TOOLS: Defined in src/gralph/utils/deps.py (grouped with dependency checking logic)
+
+Both constants are accessible via proper imports and follow Python packaging best practices. GRALPH_DIR is exported at the package level for easy access, while REQUIRED_TOOLS is co-located with the deps module where it's primarily used.
+
+---
