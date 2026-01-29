@@ -63,3 +63,12 @@ The __init__.py file ensures gralph can be imported as a proper Python package a
 
 ---
 
+## [2026-01-29] Verified pyproject.toml entry points
+Confirmed that pyproject.toml has proper entry points configured in the [project.scripts] section:
+- gralph = "gralph.cli:app" (main CLI entry point using Typer)
+- gralph-run = "gralph.run:main" (standalone runner entry point)
+
+Both entry points follow Python packaging standards for console scripts. The configuration uses setuptools as the build backend with proper package discovery (where = ["src"]) and includes package data configuration for templates (*.sh files in gralph.templates).
+
+---
+
