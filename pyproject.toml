@@ -1,0 +1,27 @@
+[project]
+name = "geirs-ralph"
+version = "0.7.0"
+description = """
+Autonomous 'Ralph Wiggum' dev loop for project scaffolding and task execution. 
+Drives AI agents through iterative cycles of planning, coding, and verification. 
+Sandboxed via Docker for secure 'YOLO mode' autonomy.
+"""
+dependencies = [
+    "typer",
+    "rich",
+]
+requires-python = ">=3.11"
+
+[project.scripts]
+gralph = "gralph.cli:app"
+gralph-run = "gralph.run:main"
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"gralph.templates" = ["*.sh"]
