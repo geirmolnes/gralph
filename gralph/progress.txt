@@ -24,3 +24,12 @@ Added main.py with:
 - Follows existing patterns (uses core.loop, core.setup, utils.console)
 
 ---
+
+## [2026-01-29] Verified CLI separation
+Confirmed that CLI module (src/gralph/cli.py) is properly separated from main orchestration (src/gralph/main.py). Both files exist and serve distinct purposes:
+- cli.py: Typer-based command-line interface
+- main.py: Core orchestration logic
+
+This separation follows good architectural practices for CLI applications.
+
+---
