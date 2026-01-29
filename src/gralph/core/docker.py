@@ -1,8 +1,6 @@
 """Docker sandboxed execution for Claude."""
 
 import json
-import os
-import shutil
 import subprocess
 from pathlib import Path
 
@@ -131,9 +129,9 @@ def check_container_auth(image_name: str = "gralph-sandbox") -> bool:
     return result.returncode == 0
 
 
-def fix_volume_permissions(image_name: str = "gralph-sandbox") -> None:
+def fix_volume_permissions(image_name: str = "gralph-sandbox") -> bool:
     """Ensure volume has correct permissions for non-root user."""
-    subprocess.run(
+    result = subprocess.run(
         [
             "docker", "run", "--rm",
             "-v", f"{VOLUME_NAME}:{CLAUDE_HOME}",
@@ -144,6 +142,7 @@ def fix_volume_permissions(image_name: str = "gralph-sandbox") -> None:
         ],
         capture_output=True,
     )
+    return result.returncode == 0
 
 
 def authenticate_container(image_name: str = "gralph-sandbox") -> bool:
@@ -230,8 +229,7 @@ def stream_claude_docker(
     process.stdin.close()
     
     full_output = []
-    found_promise = False
-    
+
     try:
         for line in process.stdout:
             line = line.strip()
@@ -249,8 +247,6 @@ def stream_claude_docker(
                             text = block.get("text", "")
                             console.print(text, end="")
                             full_output.append(text)
-                            if completion_promise in text:
-                                found_promise = True
                     console.print()  # Newline after assistant message
                 
                 elif event_type == "content_block_delta":
@@ -259,8 +255,6 @@ def stream_claude_docker(
                         text = delta.get("text", "")
                         console.print(text, end="", highlight=False)
                         full_output.append(text)
-                        if completion_promise in text:
-                            found_promise = True
                 
                 elif event_type == "content_block_stop":
                     # End of a content block - add newline for readability
@@ -268,8 +262,8 @@ def stream_claude_docker(
                 
                 elif event_type == "result":
                     result_text = event.get("result", "")
-                    if result_text and completion_promise in result_text:
-                        found_promise = True
+                    if result_text:
+                        full_output.append(result_text)
                 
                 elif event_type == "error":
                     error_msg = event.get("error", {}).get("message", "Unknown error")
@@ -283,8 +277,6 @@ def stream_claude_docker(
             except json.JSONDecodeError:
                 console.print(line)
                 full_output.append(line)
-                if completion_promise in line:
-                    found_promise = True
         
         console.print()
         
@@ -293,9 +285,15 @@ def stream_claude_docker(
         raise
     finally:
         process.wait()
-        if process.returncode != 0:
-            stderr = process.stderr.read() if process.stderr else ""
-            if stderr:
-                console.print(f"[red]Docker error: {stderr[:500]}[/red]")
-    
-    return found_promise, "".join(full_output)
+
+    if process.returncode != 0:
+        stderr = process.stderr.read() if process.stderr else ""
+        if stderr:
+            console.print(f"[red]Docker error: {stderr[:500]}[/red]")
+        return False, "".join(full_output)
+
+    # Check for promise in complete output to avoid partial match issues
+    complete_output = "".join(full_output)
+    found_promise = completion_promise in complete_output
+
+    return found_promise, complete_output

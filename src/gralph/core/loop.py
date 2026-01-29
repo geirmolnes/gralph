@@ -1,6 +1,5 @@
 """The Ralph loop - iterative task execution."""
 
-import os
 from pathlib import Path
 
 from gralph.utils.console import console
@@ -62,11 +61,9 @@ def run_loop(
         console.print("Run [bold]gralph auth[/bold] to authenticate.")
         return False
 
-    os.chdir(gralph_dir.parent)
-    console.print(f"[bold green]🍩 Running from:[/bold green] {gralph_dir.parent.name}")
-    console.print("[cyan]🐳 Docker sandbox[/cyan]")
-
     project_dir = gralph_dir.parent
+    console.print(f"[bold green]🍩 Running from:[/bold green] {project_dir.name}")
+    console.print("[cyan]🐳 Docker sandbox[/cyan]")
 
     try:
         for i in range(1, max_iterations + 1):
