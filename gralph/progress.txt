@@ -82,3 +82,15 @@ The consistent use of absolute package imports (from gralph.*) improves code cla
 
 ---
 
+## [2026-01-29] Verified package installation
+Successfully verified that the gralph package installs correctly and is importable:
+- Used `pip install --break-system-packages -e .` to install in editable mode (system requires externally-managed-environment flag)
+- Package installed successfully as geirs-ralph-0.7.0
+- Import test confirmed: `import gralph` works and __version__ is accessible
+- All dependencies installed correctly: typer, rich, markdown-it-py, pygments, click, shellingham
+- Entry point scripts (gralph, gralph-run) were created in /home/node/.local/bin
+
+Installation note: The Docker environment uses an externally-managed Python installation, requiring either --break-system-packages flag or a virtual environment for pip installs.
+
+---
+
