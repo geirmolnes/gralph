@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(tree:*)",
+      "Bash(python:*)",
+      "Bash(uv pip install:*)",
+      "Bash(gralph version:*)"
+    ]
+  }
+}

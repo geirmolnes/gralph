@@ -46,14 +46,22 @@ WORKER_PROMPT_TEMPLATE = """# gralph Worker Context
 ## Technology Stack
 {stack}
 
+## Package Management
+ALWAYS use these tools - never pip, npm, or yarn:
+- Python projects: `uv` (uv add, uv run, uv pip, etc.)
+- JavaScript/TypeScript: `bun` (bun add, bun run, etc.)
+The project is already initialized with the appropriate package manager.
+
 ## Directory Structure
 CRITICAL: Understand where files live:
 - `/workspace/` (or `.`) = PROJECT ROOT - all your code goes here
 - `/workspace/gralph/` = GRALPH CONFIG ONLY - contains PRD.md, PROMPT.md, progress.txt
+- `/workspace/tests/` = TEST FILES - all tests go here (pytest for Python, bun test for JS)
 - NEVER create project code inside `gralph/` - that folder is only for gralph metadata
 
 When creating files:
 - `src/`, `main.py`, `pyproject.toml`, etc. → project root (`.`)
+- Test files → `tests/` (e.g., `tests/test_main.py`)
 - Updating task status → `gralph/PRD.md`
 - Logging progress → `gralph/progress.txt`
 
@@ -79,12 +87,18 @@ LOOP_PROMPT_TEMPLATE = """@gralph/PRD.md @gralph/progress.txt @gralph/PROMPT.md
 DIRECTORY STRUCTURE:
 - Project code goes in the ROOT directory (.), NOT inside gralph/
 - gralph/ folder is ONLY for: PRD.md, PROMPT.md, progress.txt
-- Example: create src/main.py at ./src/main.py, NOT ./gralph/src/main.py
+- tests/ folder is for ALL test files (pytest for Python, bun test for JS)
+- Example: create src/main.py at ./src/main.py, tests at ./tests/test_main.py
+
+PACKAGE MANAGEMENT (mandatory):
+- Python: ALWAYS use `uv` (uv add, uv run, uv pip) - NEVER use pip directly
+- JavaScript: ALWAYS use `bun` (bun add, bun run) - NEVER use npm/yarn
 
 WORKFLOW:
 1. Find the highest-priority unchecked task (- [ ]) and implement it.
-   - Adopt a TDD approach: create or update a test case that verifies this task, and ensure it passes.
-   - If TDD is not applicable or too unpractical for the specified task, then you don't have to create a test.
+   - Adopt a TDD approach: create tests in the tests/ directory (e.g., tests/test_feature.py)
+   - Run tests with `uv run pytest` (Python) or `bun test` (JS)
+   - If TDD is not applicable for the task, you may skip creating a test.
 2. Run the verification command for that task.
 3. If verification passes, mark the task done: change '- [ ]' to '- [x]' in gralph/PRD.md.
 4. Append what you learned to gralph/progress.txt.

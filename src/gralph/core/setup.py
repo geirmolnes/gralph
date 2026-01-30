@@ -21,6 +21,52 @@ def load_ralph_sh() -> str:
     return importlib.resources.files("gralph.templates").joinpath("ralph.sh").read_text()
 
 
+def is_python_stack(stack: str) -> bool:
+    """Check if stack is Python-based."""
+    python_keywords = ["python", "py", "flask", "django", "fastapi", "typer", "cli"]
+    return any(kw in stack.lower() for kw in python_keywords)
+
+
+def is_js_stack(stack: str) -> bool:
+    """Check if stack is JavaScript/TypeScript-based."""
+    js_keywords = ["javascript", "js", "typescript", "ts", "node", "react", "vue", "next", "bun"]
+    return any(kw in stack.lower() for kw in js_keywords)
+
+
+def init_package_manager(stack: str) -> None:
+    """Initialize uv for Python or bun for JS projects, including test setup."""
+    if is_python_stack(stack):
+        if not Path("pyproject.toml").exists():
+            result = subprocess.run(["uv", "init"], capture_output=True, text=True)
+            if result.returncode == 0:
+                console.print("[dim]Initialized uv project[/dim]")
+            else:
+                console.print(f"[yellow]uv init failed: {result.stderr}[/yellow]")
+        
+        # Add pytest as dev dependency
+        subprocess.run(["uv", "add", "--dev", "pytest"], capture_output=True, text=True)
+        console.print("[dim]Added pytest[/dim]")
+        
+        # Create tests directory with __init__.py
+        tests_dir = Path("tests")
+        tests_dir.mkdir(exist_ok=True)
+        (tests_dir / "__init__.py").touch()
+        console.print("[dim]Created tests/[/dim]")
+        
+    elif is_js_stack(stack):
+        if not Path("package.json").exists():
+            result = subprocess.run(["bun", "init", "-y"], capture_output=True, text=True)
+            if result.returncode == 0:
+                console.print("[dim]Initialized bun project[/dim]")
+            else:
+                console.print(f"[yellow]bun init failed: {result.stderr}[/yellow]")
+        
+        # Create tests directory
+        tests_dir = Path("tests")
+        tests_dir.mkdir(exist_ok=True)
+        console.print("[dim]Created tests/[/dim]")
+
+
 def setup_gitignore() -> None:
     """Ensure gralph internal files are in .gitignore."""
     gitignore = Path(".gitignore")
@@ -76,6 +122,9 @@ def core_setup(goal: str, stack: str, skip_clarify: bool = False) -> bool:
     if not Path(".git").exists():
         subprocess.run(["git", "init"], capture_output=True)
         console.print("[dim]Initialized git repository[/dim]")
+
+    # Auto-init package manager based on stack
+    init_package_manager(stack)
 
     setup_gitignore()
 

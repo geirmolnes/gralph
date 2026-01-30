@@ -26,6 +26,8 @@ uv tool install .
 **Requirements:**
 - Docker (for sandboxed execution)
 - Claude Code CLI (`npm install -g @anthropic-ai/claude-code`)
+- `uv` (for Python projects) — [install](https://docs.astral.sh/uv/getting-started/installation/)
+- `bun` (for JS/TS projects) — [install](https://bun.sh/docs/installation)
 
 ## Quick Start
 
@@ -84,8 +86,18 @@ your-project/
 │   ├── PROMPT.md     # Context for Claude worker
 │   ├── progress.txt  # Learnings log
 │   └── ralph.sh      # Standalone loop runner
+├── tests/            # Test directory (auto-created)
+├── pyproject.toml    # Python: auto-initialized with uv
 └── ... your code
 ```
+
+### Auto-Initialization
+
+Based on your stack, gralph automatically:
+- **Python**: Runs `uv init`, adds `pytest` as dev dependency, creates `tests/`
+- **JavaScript/TypeScript**: Runs `bun init`, creates `tests/`
+
+This ensures the project is ready to go before Claude starts working.
 
 ### PRD Format
 
