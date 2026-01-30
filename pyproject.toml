@@ -1,6 +1,6 @@
 [project]
 name = "geirs-ralph"
-version = "0.7.1"
+version = "0.7.2"
 description = """
 Autonomous 'Ralph Wiggum' dev loop for project scaffolding and task execution. 
 Drives AI agents through iterative cycles of planning, coding, and verification. 

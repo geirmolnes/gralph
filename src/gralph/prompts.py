@@ -46,30 +46,48 @@ WORKER_PROMPT_TEMPLATE = """# gralph Worker Context
 ## Technology Stack
 {stack}
 
+## Directory Structure
+CRITICAL: Understand where files live:
+- `/workspace/` (or `.`) = PROJECT ROOT - all your code goes here
+- `/workspace/gralph/` = GRALPH CONFIG ONLY - contains PRD.md, PROMPT.md, progress.txt
+- NEVER create project code inside `gralph/` - that folder is only for gralph metadata
+
+When creating files:
+- `src/`, `main.py`, `pyproject.toml`, etc. → project root (`.`)
+- Updating task status → `gralph/PRD.md`
+- Logging progress → `gralph/progress.txt`
+
 ## Instructions
 You are implementing a project step by step. Focus only on the current task.
 Write clean, working code. Make the verification command pass.
 Do not modify files unrelated to the current task.
 Only when you are truly done, output the completion promise provided in the task context
 - Only work on a single task per iteration.
-- Update PRD.md with progress for that task.
-- Append learnings to progress.txt (patterns at the top).
+- Update gralph/PRD.md with progress for that task.
+- Append learnings to gralph/progress.txt (patterns at the top).
 - Auth: docker sandbox persists Claude login inside its volume.
 
 ## Important
 - If you discover something useful, mention it so it can be logged.
 - If a task seems impossible, explain why clearly.
 - Check existing files before creating new ones.
-- Log learnings in progress.txt; put reusable patterns in ## Codebase Patterns at the top.
+- Log learnings in gralph/progress.txt; put reusable patterns in ## Codebase Patterns at the top.
 """
 
 LOOP_PROMPT_TEMPLATE = """@gralph/PRD.md @gralph/progress.txt @gralph/PROMPT.md
+
+DIRECTORY STRUCTURE:
+- Project code goes in the ROOT directory (.), NOT inside gralph/
+- gralph/ folder is ONLY for: PRD.md, PROMPT.md, progress.txt
+- Example: create src/main.py at ./src/main.py, NOT ./gralph/src/main.py
+
+WORKFLOW:
 1. Find the highest-priority unchecked task (- [ ]) and implement it.
    - Adopt a TDD approach: create or update a test case that verifies this task, and ensure it passes.
    - If TDD is not applicable or too unpractical for the specified task, then you don't have to create a test.
 2. Run the verification command for that task.
-3. If verification passes, mark the task done: change '- [ ]' to '- [x]' in PRD.md.
-4. Append what you learned to progress.txt.
+3. If verification passes, mark the task done: change '- [ ]' to '- [x]' in gralph/PRD.md.
+4. Append what you learned to gralph/progress.txt.
 5. Commit your changes with a descriptive message.{push_instruction}
 ONLY WORK ON A SINGLE TASK PER ITERATION.
 If all tasks are complete (no more '- [ ]'), output: {promise}"""
