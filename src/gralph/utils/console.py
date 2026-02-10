@@ -56,6 +56,17 @@ def prompt_input(
 
         value = value.strip()
         if value or not required:
+            # Echo back long input in a wrapped panel so the user can
+            # verify what was captured (pasted text is hard to read raw).
+            if value and len(value) > 60:
+                console.print(
+                    Panel(
+                        value,
+                        border_style="dim",
+                        padding=(0, 2),
+                        expand=False,
+                    )
+                )
             return value
 
         console.print("  [dim]Please enter a value.[/dim]")
