@@ -1,5 +1,5 @@
 [project]
-name = "geirs-ralph"
+name = "gralph"
 version = "0.8.0"
 description = """
 Autonomous 'Ralph Wiggum' dev loop for project scaffolding and task execution. 

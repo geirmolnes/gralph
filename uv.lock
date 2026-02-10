@@ -23,7 +23,7 @@ wheels = [
 ]
 
 [[package]]
-name = "geirs-ralph"
+name = "gralph"
 version = "0.8.0"
 source = { editable = "." }
 dependencies = [
