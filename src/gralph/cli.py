@@ -14,7 +14,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from gralph import __version__, GRALPH_DIR
-from gralph.utils.console import console, show_version
+from gralph.utils.console import console, show_version, prompt_input
 from gralph.utils.paths import find_gralph_dir
 from gralph.utils.deps import REQUIRED_TOOLS
 from gralph.core.setup import core_setup
@@ -28,27 +28,34 @@ app = typer.Typer(
 )
 
 
-def _resolve_goal(goal: str, goal_file: Optional[Path]) -> str:
-    """Resolve goal text from direct input and optional context file."""
-    if not goal_file:
-        if not goal or goal.strip() == "":
-            console.print("[red]Provide --goal or --goal-file.[/red]")
+def _resolve_goal(goal: Optional[str], goal_file: Optional[Path]) -> str:
+    """Resolve goal text from flags or interactive prompt."""
+    # Load file context if provided
+    file_context = ""
+    if goal_file:
+        if not goal_file.exists() or not goal_file.is_file():
+            console.print(f"[red]Goal file not found: {goal_file}[/red]")
             raise typer.Exit(1)
+        file_context = goal_file.read_text(encoding="utf-8").strip()
+        if not file_context:
+            console.print(f"[red]Goal file is empty: {goal_file}[/red]")
+            raise typer.Exit(1)
+
+    # If goal provided via flag, combine with file context
+    if goal and goal.strip():
+        if file_context:
+            return f"{goal.strip()}\n\nAdditional context from {goal_file}:\n{file_context}"
         return goal.strip()
 
-    if not goal_file.exists() or not goal_file.is_file():
-        console.print(f"[red]Goal file not found: {goal_file}[/red]")
-        raise typer.Exit(1)
+    # If only file context, use that
+    if file_context:
+        return file_context
 
-    context = goal_file.read_text(encoding="utf-8").strip()
-    if not context:
-        console.print(f"[red]Goal file is empty: {goal_file}[/red]")
-        raise typer.Exit(1)
-
-    if not goal or goal.strip() == "":
-        return context
-
-    return f"{goal.strip()}\n\nAdditional context from {goal_file}:\n{context}"
+    # Interactive prompt
+    return prompt_input(
+        "What do you want to build?",
+        hint="Describe your project. What's the core functionality?",
+    )
 
 
 @app.callback()
@@ -66,7 +73,7 @@ def init(
         None, "--goal", "-g", help="What to build"
     ),
     stack: Optional[str] = typer.Option(
-        "python", "--stack", "-s", help="Tech stack", prompt=True
+        None, "--stack", "-s", help="Tech stack"
     ),
     skip_clarify: bool = typer.Option(
         False, "--quick", "-q", help="Skip clarifying questions"
@@ -81,16 +88,26 @@ def init(
         console.print(f"[red]Directory '{name}' already exists[/red]")
         raise typer.Exit(1)
 
+    show_version()
+
+    # Gather inputs before creating the directory (so Ctrl+C leaves nothing behind)
+    resolved_goal = _resolve_goal(goal, goal_file)
+
+    if not stack:
+        stack = prompt_input(
+            "Tech stack",
+            hint="e.g. python, typescript, react, fastapi",
+            default="python",
+        )
+
     path.mkdir()
     os.chdir(path)
-    console.print(f"[dim]Created: {name}[/dim]")
-    
-    resolved_goal = _resolve_goal(goal, goal_file)
+    console.print(f"\n[dim]Created {name}/[/dim]")
 
     if not core_setup(resolved_goal, stack, skip_clarify=skip_clarify):
         raise typer.Exit(1)
-    
-    console.print(f"[bold]Next:[/bold] cd {name}")
+
+    console.print(f"\n[bold]Next:[/bold] cd {name}")
 
 
 @app.command()
@@ -99,7 +116,7 @@ def bootstrap(
         None, "--goal", "-g", help="What to build"
     ),
     stack: Optional[str] = typer.Option(
-        "python", "--stack", "-s", help="Tech stack", prompt=True
+        None, "--stack", "-s", help="Tech stack"
     ),
     skip_clarify: bool = typer.Option(
         False, "--quick", "-q", help="Skip clarifying questions"
@@ -118,6 +135,13 @@ def bootstrap(
         raise typer.Exit(1)
 
     resolved_goal = _resolve_goal(goal, goal_file)
+
+    if not stack:
+        stack = prompt_input(
+            "Tech stack",
+            hint="e.g. python, typescript, react, fastapi",
+            default="python",
+        )
 
     if not core_setup(resolved_goal, stack, skip_clarify=skip_clarify):
         raise typer.Exit(1)

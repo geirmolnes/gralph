@@ -10,7 +10,7 @@ from rich.panel import Panel
 from rich.prompt import Prompt
 
 from gralph import GRALPH_DIR
-from gralph.utils.console import console
+from gralph.utils.console import console, prompt_input
 from gralph.prompts import ARCHITECT_PROMPT, WORKER_PROMPT_TEMPLATE, CLARIFY_PROMPT
 from gralph.core.prd import validate_prd
 from gralph.core.claude import generate_prd, get_clarifying_questions
@@ -87,25 +87,23 @@ def setup_gitignore() -> None:
 
 def gather_clarifications(goal: str, stack: str) -> str:
     """Ask clarifying questions and gather answers."""
-    console.print("[bold cyan]🤔 Let me ask a few questions to understand better...[/bold cyan]\n")
-    
+    console.print("\n[bold cyan]A few quick questions...[/bold cyan]")
+
     questions, error = get_clarifying_questions(goal, stack, CLARIFY_PROMPT)
-    
+
     if error or not questions:
-        console.print("[yellow]Skipping clarifications...[/yellow]")
+        console.print("[dim]Skipping clarifications.[/dim]")
         return ""
-    
-    console.print(Panel(questions, title="Questions", border_style="cyan"))
-    console.print()
-    
-    answers = Prompt.ask(
-        "[bold]Your answers[/bold] (or press Enter to skip)",
-        default="",
+
+    answers = prompt_input(
+        "Clarifying questions",
+        hint=questions,
+        required=False,
     )
-    
-    if not answers.strip():
+
+    if not answers:
         return ""
-    
+
     return f"Q&A:\n{questions}\n\nUser's answers:\n{answers}"
 
 
