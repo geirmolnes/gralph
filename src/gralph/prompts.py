@@ -24,6 +24,12 @@ Stack: {stack} (use 'uv' for python, 'bun' for javascript).
 Break this down into a list of ATOMIC, SEQUENTIAL tasks.
 Each task must have a verifiable check command.
 
+PLANNING DEPTH REQUIREMENTS:
+- If the goal or clarifications include long documents, transcripts, specs, or large pasted text, include explicit early tasks to ingest, segment, summarize, and extract requirements before implementation.
+- Include tasks for handling long-context workflows when relevant (e.g., chunking strategy, indexing/retrieval, pagination/streaming, memory and token budget checks, and end-to-end validation with long inputs).
+- Generate as MANY tasks as necessary for full coverage. Do NOT artificially limit the number of tasks. Very long checklists are acceptable when complexity requires it.
+- Keep every task atomic: one clear action and one verification command.
+
 CRITICAL FORMAT RULES:
 - Output ONLY a markdown checklist. No introduction. No explanation. No code blocks.
 - Start your response with "- [ ]" on line 1.
