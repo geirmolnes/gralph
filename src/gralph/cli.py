@@ -28,6 +28,29 @@ app = typer.Typer(
 )
 
 
+def _resolve_goal(goal: str, goal_file: Optional[Path]) -> str:
+    """Resolve goal text from direct input and optional context file."""
+    if not goal_file:
+        if not goal or goal.strip() == "":
+            console.print("[red]Provide --goal or --goal-file.[/red]")
+            raise typer.Exit(1)
+        return goal.strip()
+
+    if not goal_file.exists() or not goal_file.is_file():
+        console.print(f"[red]Goal file not found: {goal_file}[/red]")
+        raise typer.Exit(1)
+
+    context = goal_file.read_text(encoding="utf-8").strip()
+    if not context:
+        console.print(f"[red]Goal file is empty: {goal_file}[/red]")
+        raise typer.Exit(1)
+
+    if not goal or goal.strip() == "":
+        return context
+
+    return f"{goal.strip()}\n\nAdditional context from {goal_file}:\n{context}"
+
+
 @app.callback()
 def main(ctx: typer.Context):
     """gralph CLI entrypoint."""
@@ -40,13 +63,16 @@ def main(ctx: typer.Context):
 def init(
     name: str = typer.Argument(..., help="Project directory name"),
     goal: Optional[str] = typer.Option(
-        None, "--goal", "-g", help="What to build", prompt=True
+        None, "--goal", "-g", help="What to build"
     ),
     stack: Optional[str] = typer.Option(
         "python", "--stack", "-s", help="Tech stack", prompt=True
     ),
     skip_clarify: bool = typer.Option(
         False, "--quick", "-q", help="Skip clarifying questions"
+    ),
+    goal_file: Optional[Path] = typer.Option(
+        None, "--goal-file", help="Path to a long text/markdown file with project context"
     ),
 ):
     """Create a new project and initialize gralph."""
@@ -59,7 +85,9 @@ def init(
     os.chdir(path)
     console.print(f"[dim]Created: {name}[/dim]")
     
-    if not core_setup(goal, stack, skip_clarify=skip_clarify):
+    resolved_goal = _resolve_goal(goal, goal_file)
+
+    if not core_setup(resolved_goal, stack, skip_clarify=skip_clarify):
         raise typer.Exit(1)
     
     console.print(f"[bold]Next:[/bold] cd {name}")
@@ -68,13 +96,16 @@ def init(
 @app.command()
 def bootstrap(
     goal: Optional[str] = typer.Option(
-        None, "--goal", "-g", help="What to build", prompt=True
+        None, "--goal", "-g", help="What to build"
     ),
     stack: Optional[str] = typer.Option(
         "python", "--stack", "-s", help="Tech stack", prompt=True
     ),
     skip_clarify: bool = typer.Option(
         False, "--quick", "-q", help="Skip clarifying questions"
+    ),
+    goal_file: Optional[Path] = typer.Option(
+        None, "--goal-file", help="Path to a long text/markdown file with project context"
     ),
 ):
     """Initialize gralph in current directory."""
@@ -86,7 +117,9 @@ def bootstrap(
         )
         raise typer.Exit(1)
 
-    if not core_setup(goal, stack, skip_clarify=skip_clarify):
+    resolved_goal = _resolve_goal(goal, goal_file)
+
+    if not core_setup(resolved_goal, stack, skip_clarify=skip_clarify):
         raise typer.Exit(1)
 
 
@@ -210,7 +243,7 @@ def edit():
         console.print("[red]Not a gralph project.[/red]")
         raise typer.Exit(1)
 
-    editor = os.environ.get("EDITOR", "nano")
+    editor = os.environ.get("EDITOR", "vim")
     subprocess.run([editor, str(gralph_dir / "PRD.md")])
 
 
