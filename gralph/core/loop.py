@@ -125,6 +125,29 @@ def _ensure_pending_tasks(gralph_dir: Path) -> bool:
     return _prompt_for_additional_tasks(gralph_dir)
 
 
+def _print_run_summary(
+    start_counts: dict[str, int],
+    end_counts: dict[str, int],
+    iterations: int,
+) -> None:
+    """Print a short summary for the just-finished run."""
+    done_delta = end_counts["completed"] - start_counts["completed"]
+    skipped_delta = end_counts["skipped"] - start_counts["skipped"]
+    failed_delta = end_counts["failed"] - start_counts["failed"]
+
+    console.print()
+    console.rule("[bold]Run Summary[/bold]")
+    console.print(f"Iterations run: {iterations}")
+    console.print(f"Completed this run: {done_delta:+d}")
+    console.print(f"Skipped this run: {skipped_delta:+d}")
+    console.print(f"Failed this run: {failed_delta:+d}")
+    console.print(
+        f"Current totals -> done: {end_counts['completed']}, "
+        f"skipped: {end_counts['skipped']}, failed: {end_counts['failed']}, "
+        f"pending: {end_counts['pending']}"
+    )
+
+
 def run_loop(
     max_iterations: int = 20,
     completion_promise: str = "<promise>COMPLETE</promise>",
@@ -142,6 +165,8 @@ def run_loop(
 
     if not _ensure_pending_tasks(gralph_dir):
         return True
+
+    start_counts = count_tasks((gralph_dir / "PRD.md").read_text())
 
     # Setup Docker sandbox
     if not ensure_docker_available():
@@ -185,13 +210,19 @@ def run_loop(
             if completed:
                 console.print()
                 console.print(f"[bold green]✅ PRD complete after {iteration} iterations![/bold green]")
+                end_counts = count_tasks((gralph_dir / "PRD.md").read_text())
+                _print_run_summary(start_counts, end_counts, iteration)
                 return True
 
         console.print()
         console.print(f"[yellow]⚠️  Reached max iterations ({max_iterations}).[/yellow]")
         console.print(f"Review {GRALPH_DIR}/PRD.md and run 'gralph run' again if needed.")
+        end_counts = count_tasks((gralph_dir / "PRD.md").read_text())
+        _print_run_summary(start_counts, end_counts, iteration)
         return False
 
     except KeyboardInterrupt:
         console.print("\n[yellow]Loop paused. Run 'gralph run' to resume.[/yellow]")
+        end_counts = count_tasks((gralph_dir / "PRD.md").read_text())
+        _print_run_summary(start_counts, end_counts, iteration)
         return False

@@ -62,6 +62,8 @@ def test_run_loop_returns_false_when_auth_missing(tmp_path: Path, monkeypatch):
 def test_run_loop_completes_and_includes_push_instruction(tmp_path: Path, monkeypatch):
     gralph_dir = _create_gralph_dir(tmp_path)
     _setup_ready_loop(monkeypatch, gralph_dir)
+    monkeypatch.setattr(loop_mod.sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr(loop_mod, "prompt_input", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("completion should not prompt")))
 
     calls: list[tuple[str, str, str, Path]] = []
 
@@ -78,6 +80,19 @@ def test_run_loop_completes_and_includes_push_instruction(tmp_path: Path, monkey
     assert promise == "<promise>COMPLETE</promise>"
     assert model == "sonnet"
     assert project_dir == gralph_dir.parent
+
+
+def test_run_loop_prints_summary_on_completion(tmp_path: Path, monkeypatch):
+    gralph_dir = _create_gralph_dir(tmp_path)
+    _setup_ready_loop(monkeypatch, gralph_dir)
+    monkeypatch.setattr(loop_mod.sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr(loop_mod, "stream_claude_docker", lambda *args, **kwargs: (True, "done"))
+
+    printed: list[str] = []
+    monkeypatch.setattr(loop_mod.console, "print", lambda *args, **kwargs: printed.append(" ".join(str(a) for a in args)))
+
+    assert loop_mod.run_loop(max_iterations=3) is True
+    assert any("Run Summary" in msg for msg in printed)
 
 
 def test_run_loop_stops_after_max_iterations(tmp_path: Path, monkeypatch):
