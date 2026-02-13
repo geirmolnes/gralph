@@ -240,7 +240,7 @@ def stream_claude_docker(
         cmd,
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
         text=True,
         bufsize=1,
     )
@@ -307,10 +307,10 @@ def stream_claude_docker(
         process.wait()
 
     if process.returncode != 0:
-        stderr = process.stderr.read() if process.stderr else ""
-        if stderr:
-            console.print(f"[red]Docker error: {stderr[:500]}[/red]")
-        return False, "".join(full_output)
+        output = "".join(full_output)
+        if output:
+            console.print(f"[red]Docker error: {output[-500:]}[/red]")
+        return False, output
 
     # Check for promise in complete output to avoid partial match issues
     complete_output = "".join(full_output)

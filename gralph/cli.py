@@ -2,6 +2,7 @@
 
 import json
 import os
+import shlex
 import shutil
 import subprocess
 import sys
@@ -390,7 +391,19 @@ def edit(
         raise typer.Exit(1)
 
     editor = os.environ.get("EDITOR", "vim")
-    subprocess.run([editor, str(target)])
+    editor_parts = shlex.split(editor)
+    if not editor_parts:
+        console.print("[red]EDITOR is set but empty.[/red]")
+        raise typer.Exit(1)
+
+    try:
+        result = subprocess.run([*editor_parts, str(target)])
+    except FileNotFoundError:
+        console.print(f"[red]Editor command not found: {editor_parts[0]}[/red]")
+        raise typer.Exit(1)
+
+    if result.returncode != 0:
+        raise typer.Exit(result.returncode)
 
 
 @app.command()
@@ -479,28 +492,45 @@ def doctor():
     # Check Docker daemon
     if shutil.which("docker"):
         console.print("\n[bold]Checking Docker daemon...[/bold]")
-        result = subprocess.run(
-            ["docker", "info"],
-            capture_output=True,
-            text=True,
-        )
-        if result.returncode == 0:
-            console.print("  [green]✓[/green] Docker daemon is running")
-        else:
-            console.print("  [red]✗[/red] Docker daemon not running")
-            console.print("    [dim]Start Docker Desktop or run: sudo systemctl start docker[/dim]")
+        try:
+            result = subprocess.run(
+                ["docker", "info"],
+                capture_output=True,
+                text=True,
+                timeout=15,
+            )
+        except (subprocess.TimeoutExpired, OSError) as exc:
+            console.print("  [red]✗[/red] Docker health check failed")
+            console.print(f"    [dim]{exc}[/dim]")
             all_ok = False
-        
-        # Check for gralph-sandbox image
-        result = subprocess.run(
-            ["docker", "images", "-q", "gralph-sandbox"],
-            capture_output=True,
-            text=True,
-        )
-        if result.stdout.strip():
-            console.print("  [green]✓[/green] gralph-sandbox image exists")
         else:
-            console.print("  [yellow]![/yellow] gralph-sandbox image not built (will be built on first run)")
+            if result.returncode == 0:
+                console.print("  [green]✓[/green] Docker daemon is running")
+            else:
+                console.print("  [red]✗[/red] Docker daemon not running")
+                console.print("    [dim]Start Docker Desktop or run: sudo systemctl start docker[/dim]")
+                all_ok = False
+
+            # Check for gralph-sandbox image
+            try:
+                result = subprocess.run(
+                    ["docker", "images", "-q", "gralph-sandbox"],
+                    capture_output=True,
+                    text=True,
+                    timeout=15,
+                )
+            except (subprocess.TimeoutExpired, OSError) as exc:
+                console.print("  [red]✗[/red] Failed to query Docker images")
+                console.print(f"    [dim]{exc}[/dim]")
+                all_ok = False
+            else:
+                if result.returncode != 0:
+                    console.print("  [red]✗[/red] Failed to query Docker images")
+                    all_ok = False
+                elif result.stdout.strip():
+                    console.print("  [green]✓[/green] gralph-sandbox image exists")
+                else:
+                    console.print("  [yellow]![/yellow] gralph-sandbox image not built (will be built on first run)")
 
     if all_ok:
         console.print("\n[green]All dependencies satisfied![/green]")

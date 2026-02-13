@@ -1,5 +1,6 @@
 """Project setup and initialization."""
 
+import re
 import subprocess
 from datetime import datetime
 from pathlib import Path
@@ -11,6 +12,10 @@ from gralph.utils.console import console, prompt_input
 from gralph.prompts import ARCHITECT_PROMPT, WORKER_PROMPT_TEMPLATE, CLARIFY_PROMPT
 from gralph.core.prd import validate_prd
 from gralph.core.claude import generate_prd, get_clarifying_questions
+
+
+PYTHON_STACK_KEYWORDS = {"python", "py", "flask", "django", "fastapi", "typer"}
+JS_STACK_KEYWORDS = {"javascript", "js", "typescript", "ts", "node", "react", "vue", "next", "bun"}
 
 
 def detect_stack(project_dir: Path | None = None) -> str | None:
@@ -26,47 +31,95 @@ def detect_stack(project_dir: Path | None = None) -> str | None:
     return None
 
 
+def _tokenize_stack(stack: str) -> set[str]:
+    """Tokenize free-form stack text into lowercase words."""
+    return {t for t in re.split(r"[^a-z0-9+]+", stack.lower()) if t}
+
+
+def _run_command(
+    args: list[str],
+    project_dir: Path,
+    timeout: int = 120,
+) -> subprocess.CompletedProcess[str] | None:
+    """Run a local command and return None on common process errors."""
+    try:
+        return subprocess.run(
+            args,
+            capture_output=True,
+            text=True,
+            cwd=project_dir,
+            timeout=timeout,
+        )
+    except FileNotFoundError:
+        console.print(f"[yellow]Command not found: {args[0]}[/yellow]")
+    except subprocess.TimeoutExpired:
+        console.print(f"[yellow]Command timed out: {' '.join(args)}[/yellow]")
+    return None
+
+
 def is_python_stack(stack: str) -> bool:
     """Check if stack is Python-based."""
-    python_keywords = ["python", "py", "flask", "django", "fastapi", "typer", "cli"]
-    return any(kw in stack.lower() for kw in python_keywords)
+    return bool(_tokenize_stack(stack) & PYTHON_STACK_KEYWORDS)
 
 
 def is_js_stack(stack: str) -> bool:
     """Check if stack is JavaScript/TypeScript-based."""
-    js_keywords = ["javascript", "js", "typescript", "ts", "node", "react", "vue", "next", "bun"]
-    return any(kw in stack.lower() for kw in js_keywords)
+    return bool(_tokenize_stack(stack) & JS_STACK_KEYWORDS)
 
 
 def init_package_manager(stack: str, project_dir: Path) -> None:
     """Initialize uv for Python or bun for JS projects, including test setup."""
-    if is_python_stack(stack):
+    detected = detect_stack(project_dir)
+    if detected == "python":
+        stack_family = "python"
+    elif detected in {"javascript", "typescript"}:
+        stack_family = "javascript"
+    else:
+        python_like = is_python_stack(stack)
+        js_like = is_js_stack(stack)
+        if python_like and not js_like:
+            stack_family = "python"
+        elif js_like and not python_like:
+            stack_family = "javascript"
+        elif python_like and js_like:
+            console.print(
+                "[yellow]Stack looks mixed between Python and JS; skipping package manager initialization.[/yellow]"
+            )
+            return
+        else:
+            console.print(
+                "[yellow]Could not detect package manager from stack; skipping package manager initialization.[/yellow]"
+            )
+            return
+
+    if stack_family == "python":
         if not (project_dir / "pyproject.toml").exists():
-            result = subprocess.run(["uv", "init"], capture_output=True, text=True, cwd=project_dir)
-            if result.returncode == 0:
+            result = _run_command(["uv", "init"], project_dir)
+            if result and result.returncode == 0:
                 console.print("[dim]Initialized uv project[/dim]")
-            else:
-                console.print(f"[yellow]uv init failed: {result.stderr}[/yellow]")
+            elif result:
+                console.print(f"[yellow]uv init failed: {result.stderr.strip()}[/yellow]")
 
-        # Add pytest as dev dependency
-        subprocess.run(["uv", "add", "--dev", "pytest"], capture_output=True, text=True, cwd=project_dir)
-        console.print("[dim]Added pytest[/dim]")
+        result = _run_command(["uv", "add", "--dev", "pytest"], project_dir)
+        if result and result.returncode == 0:
+            console.print("[dim]Added pytest[/dim]")
+        elif result:
+            console.print(f"[yellow]uv add --dev pytest failed: {result.stderr.strip()}[/yellow]")
 
-        # Create tests directory with __init__.py
         tests_dir = project_dir / "tests"
         tests_dir.mkdir(exist_ok=True)
         (tests_dir / "__init__.py").touch()
         console.print("[dim]Created tests/[/dim]")
+        return
 
-    elif is_js_stack(stack):
+    if stack_family == "javascript":
         if not (project_dir / "package.json").exists():
-            result = subprocess.run(["bun", "init", "-y"], capture_output=True, text=True, cwd=project_dir)
-            if result.returncode == 0:
+            result = _run_command(["bun", "init", "-y"], project_dir)
+            if result and result.returncode == 0:
                 console.print("[dim]Initialized bun project[/dim]")
-            else:
-                console.print(f"[yellow]bun init failed: {result.stderr}[/yellow]")
+            elif result:
+                console.print(f"[yellow]bun init failed: {result.stderr.strip()}[/yellow]")
 
-        # Create tests directory
         tests_dir = project_dir / "tests"
         tests_dir.mkdir(exist_ok=True)
         console.print("[dim]Created tests/[/dim]")
@@ -125,8 +178,11 @@ def core_setup(goal: str, stack: str, skip_clarify: bool = False, project_dir: P
     gralph_dir.mkdir(exist_ok=True)
 
     if not (project_dir / ".git").exists():
-        subprocess.run(["git", "init"], capture_output=True, cwd=project_dir)
-        console.print("[dim]Initialized git repository[/dim]")
+        result = _run_command(["git", "init"], project_dir, timeout=30)
+        if result and result.returncode == 0:
+            console.print("[dim]Initialized git repository[/dim]")
+        elif result:
+            console.print(f"[yellow]git init failed: {result.stderr.strip()}[/yellow]")
 
     # Auto-init package manager based on stack
     init_package_manager(stack, project_dir)
