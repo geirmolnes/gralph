@@ -4,5 +4,11 @@ gralph - Geir's Ralph Loop Scaffolding Tool
 Sets up and manages autonomous coding sessions with sandboxed execution.
 """
 
-__version__ = "1.0.0"
+from importlib.metadata import version, PackageNotFoundError
+
+try:
+    __version__ = version("gralph")
+except PackageNotFoundError:
+    __version__ = "dev"
+
 GRALPH_DIR = ".gralph_planning"

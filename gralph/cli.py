@@ -19,7 +19,7 @@ from gralph.utils.paths import find_gralph_dir
 from gralph.utils.deps import REQUIRED_TOOLS
 from gralph.core.setup import core_setup
 from gralph.core.loop import run_loop
-from gralph.core.prd import count_tasks, parse_current_task, mark_task, reset_all_tasks
+from gralph.core.prd import count_tasks, parse_current_task, mark_task, reset_all_tasks, parse_all_tasks
 
 app = typer.Typer(
     name="gralph",
@@ -100,11 +100,11 @@ def init(
             default="python",
         )
 
+    path = path.resolve()
     path.mkdir()
-    os.chdir(path)
     console.print(f"\n[dim]Created {name}/[/dim]")
 
-    if not core_setup(resolved_goal, stack, skip_clarify=skip_clarify):
+    if not core_setup(resolved_goal, stack, skip_clarify=skip_clarify, project_dir=path):
         raise typer.Exit(1)
 
     console.print(f"\n[bold]Next:[/bold] cd {name}")
@@ -260,15 +260,79 @@ def done():
 
 
 @app.command()
-def edit():
-    """Open PRD in editor."""
+def tasks():
+    """List all tasks with color-coded statuses."""
     gralph_dir = find_gralph_dir()
     if not gralph_dir:
         console.print("[red]Not a gralph project.[/red]")
         raise typer.Exit(1)
 
+    prd_text = (gralph_dir / "PRD.md").read_text()
+    all_tasks = parse_all_tasks(prd_text)
+
+    if not all_tasks:
+        console.print("[yellow]No tasks found.[/yellow]")
+        raise typer.Exit(0)
+
+    style_map = {
+        "x": ("green", "✅"),
+        "~": ("yellow", "⏭️ "),
+        "!": ("red", "❌"),
+        " ": ("white", "⏳"),
+    }
+    for status, desc in all_tasks:
+        color, icon = style_map.get(status, ("white", "  "))
+        console.print(f"  {icon} [{color}]{desc}[/{color}]")
+
+
+@app.command()
+def fail():
+    """Mark current task as failed."""
+    gralph_dir = find_gralph_dir()
+    if not gralph_dir:
+        console.print("[red]Not a gralph project.[/red]")
+        raise typer.Exit(1)
+
+    prd_path = gralph_dir / "PRD.md"
+    task = mark_task(prd_path, "!")
+
+    if not task:
+        console.print("[yellow]No pending tasks.[/yellow]")
+        raise typer.Exit(0)
+
+    console.print(f"[red]❌ Failed:[/red] {task}")
+
+    (gralph_dir / ".ralph_error.txt").unlink(missing_ok=True)
+    (gralph_dir / ".ralph_state.json").unlink(missing_ok=True)
+
+
+@app.command()
+def edit(
+    file: str = typer.Argument("prd", help="File to edit: prd, prompt, or progress"),
+):
+    """Open a planning file in editor."""
+    gralph_dir = find_gralph_dir()
+    if not gralph_dir:
+        console.print("[red]Not a gralph project.[/red]")
+        raise typer.Exit(1)
+
+    file_map = {
+        "prd": "PRD.md",
+        "prompt": "PROMPT.md",
+        "progress": "progress.txt",
+    }
+    filename = file_map.get(file.lower())
+    if not filename:
+        console.print(f"[red]Unknown file '{file}'. Choose: {', '.join(file_map)}[/red]")
+        raise typer.Exit(1)
+
+    target = gralph_dir / filename
+    if not target.exists():
+        console.print(f"[red]{filename} not found.[/red]")
+        raise typer.Exit(1)
+
     editor = os.environ.get("EDITOR", "vim")
-    subprocess.run([editor, str(gralph_dir / "PRD.md")])
+    subprocess.run([editor, str(target)])
 
 
 @app.command()
@@ -305,6 +369,38 @@ def reset():
     (gralph_dir / ".ralph_error.txt").unlink(missing_ok=True)
     (gralph_dir / ".ralph_state.json").unlink(missing_ok=True)
     console.print("[green]All tasks reset.[/green]")
+
+
+@app.command()
+def progress():
+    """View the progress log."""
+    gralph_dir = find_gralph_dir()
+    if not gralph_dir:
+        console.print("[red]Not a gralph project.[/red]")
+        raise typer.Exit(1)
+
+    progress_file = gralph_dir / "progress.txt"
+    if not progress_file.exists():
+        console.print("[yellow]No progress log yet.[/yellow]")
+        raise typer.Exit(0)
+
+    console.print(Panel(progress_file.read_text(), title="Progress Log", border_style="cyan"))
+
+
+@app.command()
+def rebuild():
+    """Force rebuild of the Docker sandbox image."""
+    from gralph.core.docker import ensure_docker_available, rebuild_image
+
+    if not ensure_docker_available():
+        console.print("[red]Docker is not available.[/red]")
+        raise typer.Exit(1)
+
+    if rebuild_image():
+        console.print("[green]Docker image rebuilt.[/green]")
+    else:
+        console.print("[red]Rebuild failed.[/red]")
+        raise typer.Exit(1)
 
 
 @app.command()

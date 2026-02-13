@@ -35,6 +35,11 @@ def parse_current_task(prd_text: str) -> str | None:
     return match.group(1) if match else None
 
 
+def parse_all_tasks(prd_text: str) -> list[tuple[str, str]]:
+    """Return list of (status_char, description) for all tasks."""
+    return re.findall(r"^- \[([x~! ])\] (.+?) \|\|\|", prd_text, re.MULTILINE)
+
+
 def count_tasks(prd_text: str) -> dict[str, int]:
     """Count tasks by status."""
     return {

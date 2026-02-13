@@ -25,43 +25,43 @@ def is_js_stack(stack: str) -> bool:
     return any(kw in stack.lower() for kw in js_keywords)
 
 
-def init_package_manager(stack: str) -> None:
+def init_package_manager(stack: str, project_dir: Path) -> None:
     """Initialize uv for Python or bun for JS projects, including test setup."""
     if is_python_stack(stack):
-        if not Path("pyproject.toml").exists():
-            result = subprocess.run(["uv", "init"], capture_output=True, text=True)
+        if not (project_dir / "pyproject.toml").exists():
+            result = subprocess.run(["uv", "init"], capture_output=True, text=True, cwd=project_dir)
             if result.returncode == 0:
                 console.print("[dim]Initialized uv project[/dim]")
             else:
                 console.print(f"[yellow]uv init failed: {result.stderr}[/yellow]")
-        
+
         # Add pytest as dev dependency
-        subprocess.run(["uv", "add", "--dev", "pytest"], capture_output=True, text=True)
+        subprocess.run(["uv", "add", "--dev", "pytest"], capture_output=True, text=True, cwd=project_dir)
         console.print("[dim]Added pytest[/dim]")
-        
+
         # Create tests directory with __init__.py
-        tests_dir = Path("tests")
+        tests_dir = project_dir / "tests"
         tests_dir.mkdir(exist_ok=True)
         (tests_dir / "__init__.py").touch()
         console.print("[dim]Created tests/[/dim]")
-        
+
     elif is_js_stack(stack):
-        if not Path("package.json").exists():
-            result = subprocess.run(["bun", "init", "-y"], capture_output=True, text=True)
+        if not (project_dir / "package.json").exists():
+            result = subprocess.run(["bun", "init", "-y"], capture_output=True, text=True, cwd=project_dir)
             if result.returncode == 0:
                 console.print("[dim]Initialized bun project[/dim]")
             else:
                 console.print(f"[yellow]bun init failed: {result.stderr}[/yellow]")
-        
+
         # Create tests directory
-        tests_dir = Path("tests")
+        tests_dir = project_dir / "tests"
         tests_dir.mkdir(exist_ok=True)
         console.print("[dim]Created tests/[/dim]")
 
 
-def setup_gitignore() -> None:
+def setup_gitignore(project_dir: Path) -> None:
     """Ensure gralph internal files are in .gitignore."""
-    gitignore = Path(".gitignore")
+    gitignore = project_dir / ".gitignore"
     entries = [
         f"{GRALPH_DIR}/.ralph_error.txt",
         f"{GRALPH_DIR}/.ralph_state.json",
@@ -98,24 +98,27 @@ def gather_clarifications(goal: str, stack: str) -> str:
     return f"Q&A:\n{questions}\n\nUser's answers:\n{answers}"
 
 
-def core_setup(goal: str, stack: str, skip_clarify: bool = False) -> bool:
+def core_setup(goal: str, stack: str, skip_clarify: bool = False, project_dir: Path | None = None) -> bool:
     """
     Core setup logic shared between init and bootstrap.
-    
+
     Returns:
         True if setup succeeded, False otherwise.
     """
-    gralph_dir = Path(GRALPH_DIR)
+    if project_dir is None:
+        project_dir = Path.cwd()
+
+    gralph_dir = project_dir / GRALPH_DIR
     gralph_dir.mkdir(exist_ok=True)
 
-    if not Path(".git").exists():
-        subprocess.run(["git", "init"], capture_output=True)
+    if not (project_dir / ".git").exists():
+        subprocess.run(["git", "init"], capture_output=True, cwd=project_dir)
         console.print("[dim]Initialized git repository[/dim]")
 
     # Auto-init package manager based on stack
-    init_package_manager(stack)
+    init_package_manager(stack, project_dir)
 
-    setup_gitignore()
+    setup_gitignore(project_dir)
 
     # Gather clarifications unless skipped
     clarifications = ""

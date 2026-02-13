@@ -111,6 +111,29 @@ def ensure_volume_exists() -> bool:
     return True
 
 
+def rebuild_image(image_name: str = "gralph-sandbox") -> bool:
+    """Remove existing image and rebuild from scratch."""
+    console.print(f"[yellow]Removing old image '{image_name}'...[/yellow]")
+    subprocess.run(["docker", "rmi", "-f", image_name], capture_output=True)
+
+    console.print(f"[yellow]Building Docker image '{image_name}'...[/yellow]")
+    process = subprocess.Popen(
+        ["docker", "build", "--no-cache", "-t", image_name, "-"],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+    )
+    stdout, _ = process.communicate(input=DOCKERFILE_CONTENT)
+
+    if process.returncode != 0:
+        console.print(f"[red]Failed to build Docker image:[/red]\n{stdout}")
+        return False
+
+    console.print(f"[green]Docker image '{image_name}' rebuilt successfully[/green]")
+    return True
+
+
 def check_container_auth(image_name: str = "gralph-sandbox") -> bool:
     """Check if Claude is authenticated inside the container."""
     # Run a minimal prompt to test auth
