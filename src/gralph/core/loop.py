@@ -4,6 +4,7 @@ import re
 import sys
 from pathlib import Path
 
+from gralph import GRALPH_DIR
 from gralph.utils.console import console, prompt_input
 from gralph.utils.paths import find_gralph_dir
 from gralph.prompts import LOOP_PROMPT_TEMPLATE, PUSH_INSTRUCTION, FOLLOW_UP_PROMPT
@@ -146,7 +147,7 @@ def run_loop(
 
         console.print()
         console.print(f"[yellow]⚠️  Reached max iterations ({max_iterations}).[/yellow]")
-        console.print("Review .gralph_planning/PRD.md and run 'gralph run' again if needed.")
+        console.print(f"Review {GRALPH_DIR}/PRD.md and run 'gralph run' again if needed.")
         return False
 
     except KeyboardInterrupt:

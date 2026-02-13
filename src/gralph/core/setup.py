@@ -63,9 +63,8 @@ def setup_gitignore() -> None:
     """Ensure gralph internal files are in .gitignore."""
     gitignore = Path(".gitignore")
     entries = [
-        ".gralph_planning/.ralph_error.txt",
-        ".gralph_planning/.ralph_retries.txt",
-        ".gralph_planning/.ralph_state.json",
+        f"{GRALPH_DIR}/.ralph_error.txt",
+        f"{GRALPH_DIR}/.ralph_state.json",
     ]
     if not gitignore.exists():
         gitignore.write_text("# gralph internals\n" + "\n".join(entries) + "\n")
@@ -141,7 +140,7 @@ def core_setup(goal: str, stack: str, skip_clarify: bool = False) -> bool:
         console.print("[yellow]⚠️  PRD has format issues:[/yellow]")
         for err in errors:
             console.print(f"  [dim]• {err}[/dim]")
-        console.print("[yellow]Edit .gralph_planning/PRD.md before running.[/yellow]")
+        console.print(f"[yellow]Edit {GRALPH_DIR}/PRD.md before running.[/yellow]")
 
     # Write PRD
     prd_content = f"# PRD: {goal}\n\nStack: {stack}\n\n{ai_prd}"
@@ -170,7 +169,7 @@ Started: {datetime.now().isoformat()}
     console.print(
         Panel.fit(
             f"[green]✅ Project gralph-ified![/green]\n\n"
-            f"[bold].gralph_planning/[/bold]\n"
+            f"[bold]{GRALPH_DIR}/[/bold]\n"
             f"  ├── PRD.md        [dim]# Task list[/dim]\n"
             f"  ├── PROMPT.md     [dim]# Context for Claude[/dim]\n"
             f"  └── progress.txt  [dim]# Learnings log[/dim]\n\n"
