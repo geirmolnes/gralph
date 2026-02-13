@@ -77,15 +77,15 @@ The project is already initialized with the appropriate package manager.
 ## Directory Structure
 CRITICAL: Understand where files live:
 - `/workspace/` (or `.`) = PROJECT ROOT - all your code goes here
-- `/workspace/gralph/` = GRALPH CONFIG ONLY - contains PRD.md, PROMPT.md, progress.txt
+- `/workspace/.gralph_planning/` = GRALPH CONFIG ONLY - contains PRD.md, PROMPT.md, progress.txt
 - `/workspace/tests/` = TEST FILES - all tests go here (pytest for Python, bun test for JS)
-- NEVER create project code inside `gralph/` - that folder is only for gralph metadata
+- NEVER create project code inside `.gralph_planning/` - that folder is only for gralph metadata
 
 When creating files:
 - `src/`, `main.py`, `pyproject.toml`, etc. → project root (`.`)
 - Test files → `tests/` (e.g., `tests/test_main.py`)
-- Updating task status → `gralph/PRD.md`
-- Logging progress → `gralph/progress.txt`
+- Updating task status → `.gralph_planning/PRD.md`
+- Logging progress → `.gralph_planning/progress.txt`
 
 ## Instructions
 You are implementing a project step by step. Focus only on the current task.
@@ -93,22 +93,22 @@ Write clean, working code. Make the verification command pass.
 Do not modify files unrelated to the current task.
 Only when you are truly done, output the completion promise provided in the task context
 - Only work on a single task per iteration.
-- Update gralph/PRD.md with progress for that task.
-- Append learnings to gralph/progress.txt (patterns at the top).
+- Update .gralph_planning/PRD.md with progress for that task.
+- Append learnings to .gralph_planning/progress.txt (patterns at the top).
 - Auth: docker sandbox persists Claude login inside its volume.
 
 ## Important
 - If you discover something useful, mention it so it can be logged.
 - If a task seems impossible, explain why clearly.
 - Check existing files before creating new ones.
-- Log learnings in gralph/progress.txt; put reusable patterns in ## Codebase Patterns at the top.
+- Log learnings in .gralph_planning/progress.txt; put reusable patterns in ## Codebase Patterns at the top.
 """
 
-LOOP_PROMPT_TEMPLATE = """@gralph/PRD.md @gralph/progress.txt @gralph/PROMPT.md
+LOOP_PROMPT_TEMPLATE = """@.gralph_planning/PRD.md @.gralph_planning/progress.txt @.gralph_planning/PROMPT.md
 
 DIRECTORY STRUCTURE:
-- Project code goes in the ROOT directory (.), NOT inside gralph/
-- gralph/ folder is ONLY for: PRD.md, PROMPT.md, progress.txt
+- Project code goes in the ROOT directory (.), NOT inside .gralph_planning/
+- .gralph_planning/ folder is ONLY for: PRD.md, PROMPT.md, progress.txt
 - tests/ folder is for ALL test files (pytest for Python, bun test for JS)
 - Example: create src/main.py at ./src/main.py, tests at ./tests/test_main.py
 
@@ -122,8 +122,8 @@ WORKFLOW:
    - Run tests with `uv run pytest` (Python) or `bun test` (JS)
    - If TDD is not applicable for the task, you may skip creating a test.
 2. Run the verification command for that task.
-3. If verification passes, mark the task done: change '- [ ]' to '- [x]' in gralph/PRD.md.
-4. Append what you learned to gralph/progress.txt.
+3. If verification passes, mark the task done: change '- [ ]' to '- [x]' in .gralph_planning/PRD.md.
+4. Append what you learned to .gralph_planning/progress.txt.
 5. Commit your changes with a descriptive message.{push_instruction}
 ONLY WORK ON A SINGLE TASK PER ITERATION.
 If all tasks are complete (no more '- [ ]'), output: {promise}"""

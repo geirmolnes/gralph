@@ -146,7 +146,7 @@ def run_loop(
 
         console.print()
         console.print(f"[yellow]⚠️  Reached max iterations ({max_iterations}).[/yellow]")
-        console.print("Review gralph/PRD.md and run 'gralph run' again if needed.")
+        console.print("Review .gralph_planning/PRD.md and run 'gralph run' again if needed.")
         return False
 
     except KeyboardInterrupt:

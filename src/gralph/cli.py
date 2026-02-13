@@ -130,7 +130,7 @@ def bootstrap(
 
     if Path(GRALPH_DIR).exists() and (Path(GRALPH_DIR) / "PRD.md").exists():
         console.print(
-            "[yellow]Already gralph-ified. Use 'gralph run' or delete gralph/[/yellow]"
+            "[yellow]Already gralph-ified. Use 'gralph run' or delete .gralph_planning/[/yellow]"
         )
         raise typer.Exit(1)
 
