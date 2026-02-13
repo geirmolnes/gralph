@@ -3,6 +3,30 @@ from pathlib import Path
 from gralph.core import loop as loop_mod
 
 
+PENDING_PRD = """\
+# PRD
+
+Stack: python
+
+- [ ] Build API ||| uv run pytest tests/test_api.py
+"""
+
+NO_PENDING_PRD = """\
+# PRD
+
+Stack: python
+
+- [x] Build API ||| uv run pytest tests/test_api.py
+"""
+
+
+def _create_gralph_dir(tmp_path: Path, prd_text: str = PENDING_PRD) -> Path:
+    gralph_dir = tmp_path / ".gralph_planning"
+    gralph_dir.mkdir()
+    (gralph_dir / "PRD.md").write_text(prd_text)
+    return gralph_dir
+
+
 def _setup_ready_loop(monkeypatch, gralph_dir: Path):
     monkeypatch.setattr(loop_mod, "find_gralph_dir", lambda: gralph_dir)
     monkeypatch.setattr(loop_mod, "ensure_docker_available", lambda: True)
@@ -10,7 +34,6 @@ def _setup_ready_loop(monkeypatch, gralph_dir: Path):
     monkeypatch.setattr(loop_mod, "ensure_volume_exists", lambda: True)
     monkeypatch.setattr(loop_mod, "fix_volume_permissions", lambda: True)
     monkeypatch.setattr(loop_mod, "check_container_auth", lambda: True)
-    monkeypatch.setattr(loop_mod, "_prompt_next_action", lambda _: False)
 
 
 def test_run_loop_returns_false_when_not_gralph_project(monkeypatch):
@@ -19,16 +42,14 @@ def test_run_loop_returns_false_when_not_gralph_project(monkeypatch):
 
 
 def test_run_loop_returns_false_when_docker_unavailable(tmp_path: Path, monkeypatch):
-    gralph_dir = tmp_path / ".gralph_planning"
-    gralph_dir.mkdir()
+    gralph_dir = _create_gralph_dir(tmp_path)
     monkeypatch.setattr(loop_mod, "find_gralph_dir", lambda: gralph_dir)
     monkeypatch.setattr(loop_mod, "ensure_docker_available", lambda: False)
     assert loop_mod.run_loop() is False
 
 
 def test_run_loop_returns_false_when_auth_missing(tmp_path: Path, monkeypatch):
-    gralph_dir = tmp_path / ".gralph_planning"
-    gralph_dir.mkdir()
+    gralph_dir = _create_gralph_dir(tmp_path)
     monkeypatch.setattr(loop_mod, "find_gralph_dir", lambda: gralph_dir)
     monkeypatch.setattr(loop_mod, "ensure_docker_available", lambda: True)
     monkeypatch.setattr(loop_mod, "ensure_image_exists", lambda: True)
@@ -39,8 +60,7 @@ def test_run_loop_returns_false_when_auth_missing(tmp_path: Path, monkeypatch):
 
 
 def test_run_loop_completes_and_includes_push_instruction(tmp_path: Path, monkeypatch):
-    gralph_dir = tmp_path / ".gralph_planning"
-    gralph_dir.mkdir()
+    gralph_dir = _create_gralph_dir(tmp_path)
     _setup_ready_loop(monkeypatch, gralph_dir)
 
     calls: list[tuple[str, str, str, Path]] = []
@@ -61,8 +81,7 @@ def test_run_loop_completes_and_includes_push_instruction(tmp_path: Path, monkey
 
 
 def test_run_loop_stops_after_max_iterations(tmp_path: Path, monkeypatch):
-    gralph_dir = tmp_path / ".gralph_planning"
-    gralph_dir.mkdir()
+    gralph_dir = _create_gralph_dir(tmp_path)
     _setup_ready_loop(monkeypatch, gralph_dir)
 
     count = {"n": 0}
@@ -75,3 +94,58 @@ def test_run_loop_stops_after_max_iterations(tmp_path: Path, monkeypatch):
 
     assert loop_mod.run_loop(max_iterations=2) is False
     assert count["n"] == 2
+
+
+def test_run_loop_no_tasks_cancel_returns_true_without_docker(tmp_path: Path, monkeypatch):
+    gralph_dir = _create_gralph_dir(tmp_path, prd_text=NO_PENDING_PRD)
+    monkeypatch.setattr(loop_mod, "find_gralph_dir", lambda: gralph_dir)
+    monkeypatch.setattr(loop_mod.sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr(loop_mod, "prompt_input", lambda *args, **kwargs: "2")
+    monkeypatch.setattr(loop_mod, "ensure_docker_available", lambda: (_ for _ in ()).throw(AssertionError("docker should not run")))
+
+    assert loop_mod.run_loop() is True
+
+
+def test_run_loop_no_tasks_suggests_and_continues(tmp_path: Path, monkeypatch):
+    gralph_dir = _create_gralph_dir(tmp_path, prd_text=NO_PENDING_PRD)
+    _setup_ready_loop(monkeypatch, gralph_dir)
+    monkeypatch.setattr(loop_mod.sys.stdin, "isatty", lambda: True)
+
+    responses = iter(["1", "y"])
+    monkeypatch.setattr(loop_mod, "prompt_input", lambda *args, **kwargs: next(responses))
+
+    generated: list[str] = []
+
+    def fake_follow_up(prd_text: str, stack: str, prompt_template: str, user_instruction: str = ""):
+        generated.append(user_instruction)
+        return "- [ ] Add docs ||| test -f README.md", None
+
+    monkeypatch.setattr(loop_mod, "generate_follow_up_tasks", fake_follow_up)
+    monkeypatch.setattr(loop_mod, "stream_claude_docker", lambda *args, **kwargs: (True, "done"))
+
+    assert loop_mod.run_loop(max_iterations=2) is True
+    assert generated == [""]
+    assert "- [ ] Add docs ||| test -f README.md" in (gralph_dir / "PRD.md").read_text()
+
+
+def test_run_loop_no_tasks_accepts_user_instruction(tmp_path: Path, monkeypatch):
+    gralph_dir = _create_gralph_dir(tmp_path, prd_text=NO_PENDING_PRD)
+    _setup_ready_loop(monkeypatch, gralph_dir)
+    monkeypatch.setattr(loop_mod.sys.stdin, "isatty", lambda: True)
+
+    responses = iter(["1", "Add metrics endpoint", "y"])
+    monkeypatch.setattr(loop_mod, "prompt_input", lambda *args, **kwargs: next(responses))
+
+    captured = {"instructions": []}
+
+    def fake_follow_up(prd_text: str, stack: str, prompt_template: str, user_instruction: str = ""):
+        captured["instructions"].append(user_instruction)
+        if not user_instruction:
+            return "- [ ] Add docs ||| test -f README.md", None
+        return "- [ ] Add metrics endpoint ||| uv run pytest tests/test_metrics.py", None
+
+    monkeypatch.setattr(loop_mod, "generate_follow_up_tasks", fake_follow_up)
+    monkeypatch.setattr(loop_mod, "stream_claude_docker", lambda *args, **kwargs: (True, "done"))
+
+    assert loop_mod.run_loop(max_iterations=2) is True
+    assert captured["instructions"] == ["", "Add metrics endpoint"]

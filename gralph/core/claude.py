@@ -32,7 +32,11 @@ def generate_follow_up_tasks(prd_text: str, stack: str, prompt_template: str, us
     if user_instruction:
         instruction = f"The user wants to continue with:\n{user_instruction}"
     else:
-        instruction = "Review the project state and suggest logical next steps: improvements, tests, documentation, edge cases, or features that would make this more complete."
+        instruction = (
+            "Scan the current codebase and recent completed tasks in the PRD, then suggest "
+            "logical next steps: improvements, tests, documentation, edge cases, or features "
+            "that would make this more complete."
+        )
 
     prompt = prompt_template.format(prd=prd_text, stack=stack, instruction=instruction)
     tasks, error = _run_claude_print(prompt, timeout=180)

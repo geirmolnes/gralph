@@ -164,6 +164,7 @@ Here is the current PRD with completed tasks:
 Generate ADDITIONAL tasks to continue the project. Follow the same format and rules as the existing tasks.
 Do NOT repeat tasks that are already completed.
 Build on what already exists — read the completed tasks to understand the current state.
+Before proposing tasks, inspect relevant source files, tests, and configs in the repository.
 
 TASK PLANNING:
 - Right-size: each task should represent a meaningful unit of work.
