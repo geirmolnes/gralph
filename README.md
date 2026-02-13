@@ -54,13 +54,17 @@ gralph run
 | `gralph init <name>` | Create new project directory and initialize |
 | `gralph bootstrap` | Initialize gralph in current directory |
 | `gralph auth` | Authenticate Claude inside Docker container |
-| `gralph run` | Run the Ralph loop |
-| `gralph status` | Show task progress |
-| `gralph skip` | Skip current task |
+| `gralph run [max]` | Run the Ralph loop (default: 20 iterations) |
+| `gralph status` | Show task progress counts |
+| `gralph tasks` | List all tasks with color-coded statuses |
 | `gralph done` | Manually mark current task complete |
-| `gralph edit` | Open PRD in editor |
+| `gralph skip` | Skip current task |
+| `gralph fail` | Mark current task as failed |
+| `gralph edit [file]` | Open planning file in editor (`prd`, `prompt`, `progress`) |
 | `gralph log <msg>` | Add note to progress log |
+| `gralph progress` | View the progress log |
 | `gralph reset` | Reset all tasks to pending |
+| `gralph rebuild` | Force rebuild of Docker sandbox image |
 | `gralph doctor` | Check dependencies |
 
 ## Options
@@ -69,9 +73,9 @@ gralph run
 - `-g, --goal` — What to build
 - `-s, --stack` — Tech stack (default: python)
 - `-q, --quick` — Skip clarifying questions
+- `--goal-file` — Path to a text/markdown file with project context
 
 ### `gralph run`
-- `-m, --max` — Max iterations (default: 20)
 - `--model` — Claude model (default: sonnet)
 - `--push` — Push to remote after each commit
 
@@ -81,11 +85,10 @@ After bootstrapping, gralph creates:
 
 ```
 your-project/
-├── gralph/
+├── .gralph_planning/
 │   ├── PRD.md        # Task checklist with verification commands
 │   ├── PROMPT.md     # Context for Claude worker
-│   ├── progress.txt  # Learnings log
-│   └── ralph.sh      # Standalone loop runner
+│   └── progress.txt  # Learnings log
 ├── tests/            # Test directory (auto-created)
 ├── pyproject.toml    # Python: auto-initialized with uv
 └── ... your code
