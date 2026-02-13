@@ -61,6 +61,8 @@ gralph run
 | `gralph skip` | Skip current task |
 | `gralph fail` | Mark current task as failed |
 | `gralph edit [file]` | Open planning file in editor (`prd`, `prompt`, `progress`) |
+| `gralph lint-prd` | Validate PRD task formatting and show line-level errors |
+| `gralph fix-prd` | Auto-fix common PRD formatting drift |
 | `gralph log <msg>` | Add note to progress log |
 | `gralph progress` | View the progress log |
 | `gralph reset` | Reset all tasks to pending |

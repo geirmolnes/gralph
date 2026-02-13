@@ -3,25 +3,81 @@
 import re
 from pathlib import Path
 
+TASK_LINE_RE = re.compile(r"^- \[([ xX~!])\](.*)$")
+CANONICAL_TASK_RE = re.compile(r"^- \[([x~! ])\] (.+?) \|\|\|", re.MULTILINE)
+PENDING_TASK_RE = re.compile(r"^- \[ \] (.+?) \|\|\|", re.MULTILINE)
+
+
+def lint_prd(prd_text: str) -> list[str]:
+    """Return human-readable PRD formatting errors with line numbers."""
+    errors: list[str] = []
+
+    for i, raw_line in enumerate(prd_text.splitlines(), 1):
+        line = raw_line.strip()
+        if not line.startswith("- ["):
+            continue
+
+        match = TASK_LINE_RE.match(line)
+        if not match:
+            errors.append(
+                f"Line {i}: Invalid checkbox format (expected '- [ ]', '- [x]', '- [~]', or '- [!]')."
+            )
+            continue
+
+        status, remainder = match.groups()
+        if status == "X":
+            errors.append(f"Line {i}: Use lowercase 'x' for completed tasks.")
+
+        remainder = remainder.strip()
+        if "|||" not in remainder:
+            errors.append(f"Line {i}: Missing ||| separator")
+            continue
+
+        description, verification = remainder.rsplit("|||", 1)
+        if not description.strip():
+            errors.append(f"Line {i}: Empty task description")
+        if not verification.strip():
+            errors.append(f"Line {i}: Empty verification command")
+
+    return errors
+
+
+def fix_prd_format(prd_text: str) -> tuple[str, int]:
+    """Normalize task lines to canonical format. Returns (new_text, fixes_applied)."""
+    had_trailing_newline = prd_text.endswith("\n")
+    fixed_lines: list[str] = []
+    fixes = 0
+
+    for raw_line in prd_text.splitlines():
+        stripped = raw_line.strip()
+        match = TASK_LINE_RE.match(stripped)
+        if not match:
+            fixed_lines.append(raw_line)
+            continue
+
+        status, remainder = match.groups()
+        if "|||" not in remainder:
+            fixed_lines.append(raw_line)
+            continue
+
+        description, verification = remainder.rsplit("|||", 1)
+        normalized_status = status.lower()
+        normalized = f"- [{normalized_status}] {description.strip()} ||| {verification.strip()}"
+
+        fixed_lines.append(normalized)
+        if normalized != raw_line:
+            fixes += 1
+
+    out = "\n".join(fixed_lines)
+    if had_trailing_newline:
+        out += "\n"
+    return out, fixes
+
 
 def validate_prd(prd_text: str) -> tuple[bool, list[str]]:
     """Validate that the PRD follows the expected format."""
-    lines = prd_text.strip().split("\n")
-    errors = []
-    task_count = 0
-
-    for i, line in enumerate(lines, 1):
-        line = line.strip()
-        if line.startswith("- [ ]"):
-            task_count += 1
-            if "|||" not in line:
-                errors.append(f"Line {i}: Missing ||| separator")
-            else:
-                parts = line.rsplit("|||", 1)
-                if len(parts) != 2:
-                    errors.append(f"Line {i}: Invalid format")
-                elif not parts[1].strip():
-                    errors.append(f"Line {i}: Empty verification command")
+    errors = lint_prd(prd_text)
+    task_count = len(PENDING_TASK_RE.findall(prd_text))
 
     if task_count == 0:
         errors.append("No tasks found in PRD")
@@ -31,13 +87,13 @@ def validate_prd(prd_text: str) -> tuple[bool, list[str]]:
 
 def parse_current_task(prd_text: str) -> str | None:
     """Extract the current (first unchecked) task description."""
-    match = re.search(r"^- \[ \] (.+?) \|\|\|", prd_text, re.MULTILINE)
+    match = PENDING_TASK_RE.search(prd_text)
     return match.group(1) if match else None
 
 
 def parse_all_tasks(prd_text: str) -> list[tuple[str, str]]:
     """Return list of (status_char, description) for all tasks."""
-    return re.findall(r"^- \[([x~! ])\] (.+?) \|\|\|", prd_text, re.MULTILINE)
+    return CANONICAL_TASK_RE.findall(prd_text)
 
 
 def count_tasks(prd_text: str) -> dict[str, int]:

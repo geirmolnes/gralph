@@ -9,7 +9,7 @@ from gralph.utils.console import console, prompt_input
 from gralph.utils.paths import find_gralph_dir
 from gralph.prompts import LOOP_PROMPT_TEMPLATE, PUSH_INSTRUCTION, FOLLOW_UP_PROMPT
 from gralph.core.claude import generate_follow_up_tasks
-from gralph.core.prd import append_tasks, count_tasks, validate_prd
+from gralph.core.prd import append_tasks, count_tasks, lint_prd, validate_prd
 from gralph.core.docker import (
     ensure_docker_available,
     ensure_image_exists,
@@ -125,6 +125,26 @@ def _ensure_pending_tasks(gralph_dir: Path) -> bool:
     return _prompt_for_additional_tasks(gralph_dir)
 
 
+def _check_prd_format(gralph_dir: Path) -> bool:
+    """Validate PRD formatting before entering the execution loop."""
+    prd_text = (gralph_dir / "PRD.md").read_text()
+    errors = lint_prd(prd_text)
+    if not errors:
+        return True
+
+    console.print("\n[red]PRD format issues detected:[/red]")
+    for err in errors[:20]:
+        console.print(f"  [dim]• {err}[/dim]")
+    if len(errors) > 20:
+        console.print(f"  [dim]• ...and {len(errors) - 20} more[/dim]")
+
+    console.print(
+        "\n[yellow]Run [bold]gralph lint-prd[/bold] for details or "
+        "[bold]gralph fix-prd[/bold] to normalize common formatting issues.[/yellow]"
+    )
+    return False
+
+
 def _print_run_summary(
     start_counts: dict[str, int],
     end_counts: dict[str, int],
@@ -161,6 +181,9 @@ def run_loop(
         console.print(
             "Run [bold]gralph init[/bold] or [bold]gralph bootstrap[/bold] first."
         )
+        return False
+
+    if not _check_prd_format(gralph_dir):
         return False
 
     if not _ensure_pending_tasks(gralph_dir):

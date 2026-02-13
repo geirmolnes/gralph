@@ -20,7 +20,15 @@ from gralph.utils.paths import find_gralph_dir
 from gralph.utils.deps import REQUIRED_TOOLS
 from gralph.core.setup import core_setup, detect_stack
 from gralph.core.loop import run_loop
-from gralph.core.prd import count_tasks, parse_current_task, mark_task, reset_all_tasks, parse_all_tasks
+from gralph.core.prd import (
+    count_tasks,
+    fix_prd_format,
+    lint_prd,
+    mark_task,
+    parse_all_tasks,
+    parse_current_task,
+    reset_all_tasks,
+)
 
 app = typer.Typer(
     name="gralph",
@@ -57,6 +65,20 @@ def _resolve_goal(goal: Optional[str], goal_file: Optional[Path]) -> str:
         "What do you want to build?",
         hint="Describe your project. What's the core functionality?",
     )
+
+
+def _get_prd_path() -> Path:
+    """Resolve PRD path or exit if not in a gralph project."""
+    gralph_dir = find_gralph_dir()
+    if not gralph_dir:
+        console.print("[red]Not a gralph project.[/red]")
+        raise typer.Exit(1)
+
+    prd_path = gralph_dir / "PRD.md"
+    if not prd_path.exists():
+        console.print(f"[red]{GRALPH_DIR}/PRD.md not found.[/red]")
+        raise typer.Exit(1)
+    return prd_path
 
 
 @app.callback()
@@ -274,6 +296,54 @@ def status():
         console.print(
             f"\n[yellow]Last error:[/yellow]\n[dim]{error_file.read_text()[:500]}[/dim]"
         )
+
+
+@app.command("lint-prd")
+def lint_prd_command():
+    """Check PRD task-line formatting."""
+    prd_path = _get_prd_path()
+    prd_text = prd_path.read_text()
+    errors = lint_prd(prd_text)
+
+    if errors:
+        console.print("[red]PRD format issues found:[/red]")
+        for err in errors:
+            console.print(f"  [dim]• {err}[/dim]")
+        raise typer.Exit(1)
+
+    total_tasks = sum(count_tasks(prd_text).values())
+    if total_tasks == 0:
+        console.print("[yellow]No task lines found in PRD.[/yellow]")
+    else:
+        console.print(f"[green]PRD format looks good ({total_tasks} tasks).[/green]")
+
+
+@app.command("fix-prd")
+def fix_prd_command():
+    """Auto-normalize common PRD task formatting issues."""
+    prd_path = _get_prd_path()
+    original_text = prd_path.read_text()
+    fixed_text, fixes = fix_prd_format(original_text)
+
+    if fixes > 0:
+        prd_path.write_text(fixed_text)
+        console.print(f"[green]Applied {fixes} PRD formatting fix{'es' if fixes != 1 else ''}.[/green]")
+    else:
+        console.print("[dim]No auto-fixable PRD formatting issues found.[/dim]")
+
+    remaining_errors = lint_prd(prd_path.read_text())
+    if remaining_errors:
+        console.print("[yellow]Remaining issues require manual edits:[/yellow]")
+        for err in remaining_errors:
+            console.print(f"  [dim]• {err}[/dim]")
+        console.print("[yellow]Use 'gralph edit prd' to fix the remaining lines.[/yellow]")
+        raise typer.Exit(1)
+
+    total_tasks = sum(count_tasks(prd_path.read_text()).values())
+    if total_tasks == 0:
+        console.print("[yellow]PRD has no task lines yet.[/yellow]")
+    else:
+        console.print(f"[green]PRD format now valid ({total_tasks} tasks).[/green]")
 
 
 @app.command()

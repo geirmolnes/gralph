@@ -59,6 +59,25 @@ def test_run_loop_returns_false_when_auth_missing(tmp_path: Path, monkeypatch):
     assert loop_mod.run_loop() is False
 
 
+def test_run_loop_fails_fast_when_prd_has_format_errors(tmp_path: Path, monkeypatch):
+    broken_prd = """\
+# PRD
+
+Stack: python
+
+- [ ] Missing separator
+"""
+    gralph_dir = _create_gralph_dir(tmp_path, prd_text=broken_prd)
+    monkeypatch.setattr(loop_mod, "find_gralph_dir", lambda: gralph_dir)
+    monkeypatch.setattr(
+        loop_mod,
+        "ensure_docker_available",
+        lambda: (_ for _ in ()).throw(AssertionError("docker should not run")),
+    )
+
+    assert loop_mod.run_loop() is False
+
+
 def test_run_loop_completes_and_includes_push_instruction(tmp_path: Path, monkeypatch):
     gralph_dir = _create_gralph_dir(tmp_path)
     _setup_ready_loop(monkeypatch, gralph_dir)

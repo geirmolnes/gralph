@@ -3,6 +3,8 @@ from pathlib import Path
 from gralph.core.prd import (
     append_tasks,
     count_tasks,
+    fix_prd_format,
+    lint_prd,
     mark_task,
     parse_current_task,
     reset_all_tasks,
@@ -41,6 +43,18 @@ MIXED_PRD = """\
 - [ ] Another pending ||| pytest tests/t5.py
 """
 
+BROKEN_PRD = """\
+- [X] Uppercase status ||| pytest tests/test_upper.py
+- [ ] Missing separator
+- [ ]  ||| pytest tests/test_empty_desc.py
+- [ ] Has verify but empty |||
+"""
+
+NEEDS_FIX_PRD = """\
+- [X]   Build auth   |||    pytest tests/test_auth.py
+- [ ]Build API|||pytest tests/test_api.py
+"""
+
 
 class TestValidatePrd:
     def test_valid(self):
@@ -62,6 +76,31 @@ class TestValidatePrd:
         valid, errors = validate_prd(NO_TASKS_PRD)
         assert valid is False
         assert any("No tasks found" in e for e in errors)
+
+
+class TestLintPrd:
+    def test_returns_line_level_errors(self):
+        errors = lint_prd(BROKEN_PRD)
+        assert any("Line 1" in e and "lowercase 'x'" in e for e in errors)
+        assert any("Line 2" in e and "Missing |||" in e for e in errors)
+        assert any("Line 3" in e and "Empty task description" in e for e in errors)
+        assert any("Line 4" in e and "Empty verification" in e for e in errors)
+
+    def test_no_errors_for_valid_prd(self):
+        assert lint_prd(VALID_PRD) == []
+
+
+class TestFixPrdFormat:
+    def test_normalizes_common_spacing_and_status(self):
+        fixed, fixes = fix_prd_format(NEEDS_FIX_PRD)
+        assert fixes == 2
+        assert "- [x] Build auth ||| pytest tests/test_auth.py" in fixed
+        assert "- [ ] Build API ||| pytest tests/test_api.py" in fixed
+
+    def test_does_not_change_unfixable_lines(self):
+        fixed, fixes = fix_prd_format(NO_SEP_PRD)
+        assert fixes == 0
+        assert fixed == NO_SEP_PRD
 
 
 class TestParseCurrentTask:
