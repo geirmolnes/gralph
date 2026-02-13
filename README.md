@@ -7,7 +7,7 @@ Autonomous "Ralph Wiggum" dev loop for project scaffolding and task execution. D
 1. **Bootstrap** - Describe what you want to build, answer clarifying questions
 2. **Plan** - Claude generates an atomic task list with verification commands
 3. **Loop** - Each iteration: fresh Docker container → implement one task → verify → commit
-4. **Complete** - All tasks checked off, project built
+4. **Complete** - Loop exits with a run summary (iterations + task deltas)
 
 The "Ralph loop" pattern: stateless iterations with state persisted to files. Claude has no memory between iterations — only what's in `PRD.md`, `progress.txt`, and `PROMPT.md`.
 
@@ -47,6 +47,8 @@ cd myproject
 gralph run
 ```
 
+If there are no pending tasks at run start, `gralph run` offers to generate suggested follow-up tasks (with an option to cancel).
+
 ## Commands
 
 | Command | Description |
@@ -80,6 +82,16 @@ gralph run
 ### `gralph run`
 - `--model` — Claude model (default: sonnet)
 - `--push` — Push to remote after each commit
+
+### Run Behavior
+- `gralph run` is non-interactive while tasks are executing.
+- If run starts with no pending tasks, gralph can suggest new tasks from the current PRD and codebase context.
+- After task completion, run exits and prints a summary (iterations, task deltas, current totals).
+
+### PRD Hygiene
+- `gralph lint-prd` shows task-format issues with line numbers.
+- `gralph fix-prd` normalizes common formatting drift (checkbox casing and separator spacing).
+- `gralph run` validates PRD format before execution and fails fast with guidance if formatting is invalid.
 
 ## Project Structure
 
