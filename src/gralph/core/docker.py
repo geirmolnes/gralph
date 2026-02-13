@@ -19,8 +19,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \\
     curl \\
     && rm -rf /var/lib/apt/lists/*
 
-# Install Claude Code CLI
-RUN npm install -g @anthropic-ai/claude-code
+# Install uv (system-wide)
+RUN curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh
+
+# Install Claude Code CLI and bun
+RUN npm install -g @anthropic-ai/claude-code bun
 
 # Use existing node user (UID 1000), create .claude dir
 RUN mkdir -p /home/node/.claude && chown -R node:node /home/node/.claude
@@ -116,7 +119,7 @@ def check_container_auth(image_name: str = "gralph-sandbox") -> bool:
             "docker", "run", "--rm",
             "-v", f"{VOLUME_NAME}:{CLAUDE_HOME}",
             image_name,
-            "-p", "--print", "say ok",
+            "--print", "say ok",
         ],
         capture_output=True,
         text=True,
@@ -164,12 +167,6 @@ def authenticate_container(image_name: str = "gralph-sandbox") -> bool:
     
     # Check if auth worked after the session
     return check_container_auth(image_name)
-
-
-def get_claude_config_dir() -> Path:
-    """Get Claude Code config directory."""
-    # Claude Code stores config in ~/.claude
-    return Path.home() / ".claude"
 
 
 def stream_claude_docker(

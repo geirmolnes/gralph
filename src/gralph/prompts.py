@@ -21,27 +21,43 @@ Example:
 ARCHITECT_PROMPT = """You are a Lead Software Architect. I want to build: "{goal}"
 Stack: {stack} (use 'uv' for python, 'bun' for javascript).
 {clarifications}
-Break this down into a list of ATOMIC, SEQUENTIAL tasks.
+Break this down into a list of ATOMIC tasks in logical order.
 Each task must have a verifiable check command.
 
-PLANNING DEPTH REQUIREMENTS:
-- If the goal or clarifications include long documents, transcripts, specs, or large pasted text, include explicit early tasks to ingest, segment, summarize, and extract requirements before implementation.
-- Include tasks for handling long-context workflows when relevant (e.g., chunking strategy, indexing/retrieval, pagination/streaming, memory and token budget checks, and end-to-end validation with long inputs).
-- Generate as MANY tasks as necessary for full coverage. Do NOT artificially limit the number of tasks. Very long checklists are acceptable when complexity requires it.
+TASK PLANNING:
+- Start with project scaffolding: directory structure, entry point, config, dependencies.
+- Install dependencies BEFORE tasks that use them.
+- Right-size: enough tasks to cover the goal, but don't pad with trivial steps. Each task should represent a meaningful unit of work.
 - Keep every task atomic: one clear action and one verification command.
+
+VERIFICATION RULES:
+- Prefer `uv run pytest tests/test_X.py` (Python) or `bun test` (JS) for verification.
+- Use shell commands (grep, test -f, etc.) only for infra tasks like file creation or dependency installation.
+- Verification must be self-contained: no running servers, no network calls, no external services.
+- Verification commands must return exit code 0 on success.
 
 CRITICAL FORMAT RULES:
 - Output ONLY a markdown checklist. No introduction. No explanation. No code blocks.
 - Start your response with "- [ ]" on line 1.
 - Each line: - [ ] <description> ||| <verification_command>
 - Use EXACTLY ONE ||| separator per line.
-- Verification commands must return exit code 0 on success.
 - Use ONLY `uv` or `bun` for package management.
 
-Example output (follow this format exactly):
-- [ ] Create main.py with hello world ||| python3 main.py | grep -q "hello"
-- [ ] Install requests library ||| uv pip show requests
-- [ ] Add CLI argument parsing ||| python3 main.py --help | grep -q "usage"
+Example (Python CLI with database):
+- [ ] Initialize project with uv and install typer, sqlite-utils ||| uv pip show typer && uv pip show sqlite-utils
+- [ ] Create src/db.py with init_db and connection helper ||| uv run pytest tests/test_db.py
+- [ ] Create src/models.py with User dataclass and CRUD functions ||| uv run pytest tests/test_models.py
+- [ ] Create src/cli.py with add-user and list-users commands ||| uv run python src/cli.py --help | grep -q "add-user"
+- [ ] Add input validation and error handling to CLI commands ||| uv run pytest tests/test_cli.py
+- [ ] Add export-csv command that writes users to CSV ||| uv run pytest tests/test_export.py
+
+Example (JS/TS web scraper):
+- [ ] Initialize project with bun and install cheerio, node-fetch ||| bun pm ls | grep -q cheerio
+- [ ] Create src/fetcher.ts to download page HTML ||| bun test tests/fetcher.test.ts
+- [ ] Create src/parser.ts to extract data from HTML ||| bun test tests/parser.test.ts
+- [ ] Create src/index.ts CLI entry point combining fetch + parse ||| bun run src/index.ts --help | grep -q "url"
+- [ ] Add retry logic and error handling for failed requests ||| bun test tests/fetcher.test.ts
+- [ ] Add JSON output format ||| bun test tests/output.test.ts
 """
 
 WORKER_PROMPT_TEMPLATE = """# gralph Worker Context
@@ -113,3 +129,32 @@ ONLY WORK ON A SINGLE TASK PER ITERATION.
 If all tasks are complete (no more '- [ ]'), output: {promise}"""
 
 PUSH_INSTRUCTION = "\n6. Push to remote: git push"
+
+FOLLOW_UP_PROMPT = """You are a Lead Software Architect. A project is in progress.
+Stack: {stack} (use 'uv' for python, 'bun' for javascript).
+
+Here is the current PRD with completed tasks:
+{prd}
+
+{instruction}
+
+Generate ADDITIONAL tasks to continue the project. Follow the same format and rules as the existing tasks.
+Do NOT repeat tasks that are already completed.
+Build on what already exists — read the completed tasks to understand the current state.
+
+TASK PLANNING:
+- Right-size: each task should represent a meaningful unit of work.
+- Keep every task atomic: one clear action and one verification command.
+
+VERIFICATION RULES:
+- Prefer `uv run pytest tests/test_X.py` (Python) or `bun test` (JS) for verification.
+- Use shell commands only for infra tasks.
+- Verification must be self-contained: no running servers, no network calls.
+- Verification commands must return exit code 0 on success.
+
+CRITICAL FORMAT RULES:
+- Output ONLY a markdown checklist. No introduction. No explanation. No code blocks.
+- Start your response with "- [ ]" on line 1.
+- Each line: - [ ] <description> ||| <verification_command>
+- Use EXACTLY ONE ||| separator per line.
+"""

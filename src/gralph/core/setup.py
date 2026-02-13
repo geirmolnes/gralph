@@ -1,24 +1,16 @@
 """Project setup and initialization."""
 
-import importlib.resources
-import os
 import subprocess
 from datetime import datetime
 from pathlib import Path
 
 from rich.panel import Panel
-from rich.prompt import Prompt
 
 from gralph import GRALPH_DIR
 from gralph.utils.console import console, prompt_input
 from gralph.prompts import ARCHITECT_PROMPT, WORKER_PROMPT_TEMPLATE, CLARIFY_PROMPT
 from gralph.core.prd import validate_prd
 from gralph.core.claude import generate_prd, get_clarifying_questions
-
-
-def load_ralph_sh() -> str:
-    """Load ralph.sh template from package resources."""
-    return importlib.resources.files("gralph.templates").joinpath("ralph.sh").read_text()
 
 
 def is_python_stack(stack: str) -> bool:
@@ -175,19 +167,13 @@ Started: {datetime.now().isoformat()}
 """
     (gralph_dir / "progress.txt").write_text(progress_content)
 
-    # Write ralph.sh script
-    script_path = gralph_dir / "ralph.sh"
-    script_path.write_text(load_ralph_sh())
-    os.chmod(script_path, 0o755)
-
     console.print(
         Panel.fit(
             f"[green]✅ Project gralph-ified![/green]\n\n"
             f"[bold]gralph/[/bold]\n"
             f"  ├── PRD.md        [dim]# Task list[/dim]\n"
             f"  ├── PROMPT.md     [dim]# Context for Claude[/dim]\n"
-            f"  ├── progress.txt  [dim]# Learnings log[/dim]\n"
-            f"  └── ralph.sh      [dim]# Loop runner[/dim]\n\n"
+            f"  └── progress.txt  [dim]# Learnings log[/dim]\n\n"
             f"[bold]gralph run[/bold]      Start the loop\n"
             f"[bold]gralph status[/bold]   Show progress\n"
             f"[bold]gralph skip[/bold]     Skip current task\n"

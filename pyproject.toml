@@ -14,7 +14,6 @@ requires-python = ">=3.11"
 
 [project.scripts]
 gralph = "gralph.cli:app"
-gralph-run = "gralph.run:main"
 
 [build-system]
 requires = ["setuptools>=61.0", "wheel"]
@@ -23,5 +22,7 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 where = ["src"]
 
-[tool.setuptools.package-data]
-"gralph.templates" = ["*.sh"]
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+]

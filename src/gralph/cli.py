@@ -149,7 +149,7 @@ def bootstrap(
 
 @app.command()
 def run(
-    max_iterations: int = typer.Option(20, "--max", "-m", help="Max iterations"),
+    max_iterations: int = typer.Argument(20, help="Max iterations"),
     completion_promise: str = typer.Option(
         "<promise>COMPLETE</promise>",
         "--promise",
@@ -304,7 +304,6 @@ def reset():
 
     (gralph_dir / ".ralph_error.txt").unlink(missing_ok=True)
     (gralph_dir / ".ralph_state.json").unlink(missing_ok=True)
-    (gralph_dir / ".ralph_retries.txt").unlink(missing_ok=True)
     console.print("[green]All tasks reset.[/green]")
 
 

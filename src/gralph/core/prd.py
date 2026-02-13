@@ -66,6 +66,17 @@ def mark_task(prd_path: Path, status: str) -> str | None:
     return match.group(1)
 
 
+def append_tasks(prd_path: Path, new_tasks: str) -> int:
+    """Append new tasks to the PRD. Returns count of tasks added."""
+    task_lines = [l for l in new_tasks.strip().split("\n") if l.strip().startswith("- [ ]")]
+    if not task_lines:
+        return 0
+    text = prd_path.read_text().rstrip()
+    text += "\n" + "\n".join(task_lines) + "\n"
+    prd_path.write_text(text)
+    return len(task_lines)
+
+
 def reset_all_tasks(prd_path: Path) -> None:
     """Reset all tasks to pending status."""
     text = prd_path.read_text()
