@@ -17,7 +17,7 @@ from gralph import __version__, GRALPH_DIR
 from gralph.utils.console import console, show_version, prompt_input
 from gralph.utils.paths import find_gralph_dir
 from gralph.utils.deps import REQUIRED_TOOLS
-from gralph.core.setup import core_setup
+from gralph.core.setup import core_setup, detect_stack
 from gralph.core.loop import run_loop
 from gralph.core.prd import count_tasks, parse_current_task, mark_task, reset_all_tasks, parse_all_tasks
 
@@ -110,6 +110,47 @@ def init(
     console.print(f"\n[bold]Next:[/bold] cd {name}")
 
 
+def _extract_suggested_goal(scan_output: str) -> str:
+    """Parse the '## Suggested Goal' section from scan output."""
+    lines = scan_output.split("\n")
+    capture = False
+    parts: list[str] = []
+    for line in lines:
+        if line.strip().lower().startswith("## suggested goal"):
+            capture = True
+            continue
+        if capture:
+            if line.startswith("## "):
+                break
+            parts.append(line)
+    return "\n".join(parts).strip()
+
+
+def _scan_and_suggest() -> str:
+    """Scan codebase, show results, let user accept/modify suggested goal."""
+    from gralph.core.claude import scan_codebase
+    from gralph.prompts import SCAN_PROMPT
+
+    console.print("\n[bold cyan]Scanning codebase...[/bold cyan]")
+    scan_output, error = scan_codebase(SCAN_PROMPT)
+
+    if error or not scan_output:
+        console.print("[yellow]Scan failed, falling back to manual input.[/yellow]")
+        return prompt_input(
+            "What do you want to build?",
+            hint="Describe your project. What's the core functionality?",
+        )
+
+    console.print(Panel(scan_output, title="Codebase Scan", border_style="cyan"))
+
+    suggested = _extract_suggested_goal(scan_output)
+    return prompt_input(
+        "Goal",
+        hint="Accept the suggestion or type your own.",
+        default=suggested,
+    )
+
+
 @app.command()
 def bootstrap(
     goal: Optional[str] = typer.Option(
@@ -133,6 +174,23 @@ def bootstrap(
             f"[yellow]Already gralph-ified. Use 'gralph run' or delete {GRALPH_DIR}/[/yellow]"
         )
         raise typer.Exit(1)
+
+    # Scan mode: no explicit goal → scan codebase and suggest
+    if not goal and not goal_file:
+        resolved_goal = _scan_and_suggest()
+        detected = detect_stack()
+        if detected:
+            stack = detected
+            console.print(f"[dim]Detected stack: {stack}[/dim]")
+        if not stack:
+            stack = prompt_input(
+                "Tech stack",
+                hint="e.g. python, typescript, react, fastapi",
+                default="python",
+            )
+        if not core_setup(resolved_goal, stack, skip_clarify=True):
+            raise typer.Exit(1)
+        return
 
     resolved_goal = _resolve_goal(goal, goal_file)
 

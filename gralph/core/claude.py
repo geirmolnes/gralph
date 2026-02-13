@@ -3,6 +3,17 @@
 import subprocess
 
 
+def scan_codebase(scan_prompt: str) -> tuple[str | None, str | None]:
+    """Run Claude with scan prompt to analyze existing codebase."""
+    cmd = ["claude", "--print", scan_prompt]
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+
+    if result.returncode != 0:
+        return None, result.stderr[:500] if result.stderr else "Unknown error"
+
+    return result.stdout.strip(), None
+
+
 def generate_follow_up_tasks(prd_text: str, stack: str, prompt_template: str, user_instruction: str = "") -> tuple[str | None, str | None]:
     """Generate follow-up tasks based on current PRD state and optional user input."""
     if user_instruction:

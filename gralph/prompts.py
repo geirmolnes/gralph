@@ -140,6 +140,19 @@ If all tasks are complete (no more '- [ ]'), output: {promise}""")
 
 PUSH_INSTRUCTION = "\n6. Push to remote: git push"
 
+SCAN_PROMPT = """You are a Lead Software Architect analyzing an existing codebase.
+
+Explore the project structure: list files, read key source files, configs, and tests.
+Then output EXACTLY two sections:
+
+## Codebase Summary
+3-5 lines describing what exists: languages, frameworks, structure, main functionality.
+
+## Suggested Goal
+A single paragraph describing what should be built or improved next, based on what you found.
+Be specific and actionable. Reference actual files or patterns you observed.
+"""
+
 FOLLOW_UP_PROMPT = """You are a Lead Software Architect. A project is in progress.
 Stack: {stack} (use 'uv' for python, 'bun' for javascript).
 

@@ -13,6 +13,19 @@ from gralph.core.prd import validate_prd
 from gralph.core.claude import generate_prd, get_clarifying_questions
 
 
+def detect_stack(project_dir: Path | None = None) -> str | None:
+    """Auto-detect stack from project files. Returns None if undetectable."""
+    d = project_dir or Path.cwd()
+    if (d / "pyproject.toml").exists():
+        return "python"
+    has_pkg = (d / "package.json").exists()
+    if has_pkg and (d / "tsconfig.json").exists():
+        return "typescript"
+    if has_pkg:
+        return "javascript"
+    return None
+
+
 def is_python_stack(stack: str) -> bool:
     """Check if stack is Python-based."""
     python_keywords = ["python", "py", "flask", "django", "fastapi", "typer", "cli"]

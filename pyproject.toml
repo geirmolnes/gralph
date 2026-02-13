@@ -1,6 +1,6 @@
 [project]
 name = "gralph"
-version = "1.0.0"
+version = "1.1.0"
 description = """
 Autonomous 'Ralph Wiggum' dev loop for project scaffolding and task execution. 
 Drives AI agents through iterative cycles of planning, coding, and verification. 
