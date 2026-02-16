@@ -38,6 +38,12 @@ def lint_prd(prd_text: str) -> list[str]:
             errors.append(f"Line {i}: Empty task description")
         if not verification.strip():
             errors.append(f"Line {i}: Empty verification command")
+        if description.strip() and verification.strip():
+            canonical = f"{description.strip()} ||| {verification.strip()}"
+            if remainder != canonical:
+                errors.append(
+                    f"Line {i}: Use canonical task format '<description> ||| <verification command>'."
+                )
 
     return errors
 

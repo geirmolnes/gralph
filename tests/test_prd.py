@@ -89,6 +89,10 @@ class TestLintPrd:
     def test_no_errors_for_valid_prd(self):
         assert lint_prd(VALID_PRD) == []
 
+    def test_requires_canonical_separator_spacing(self):
+        errors = lint_prd("- [ ] Build API|||pytest tests/test_api.py\n")
+        assert any("canonical task format" in e for e in errors)
+
 
 class TestFixPrdFormat:
     def test_normalizes_common_spacing_and_status(self):
