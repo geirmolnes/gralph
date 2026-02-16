@@ -228,7 +228,7 @@ def run_loop(
                 promise=completion_promise,
                 push_instruction=push_instruction,
             )
-            completed, output = stream_claude_docker(prompt, completion_promise, model, project_dir)
+            completed, _ = stream_claude_docker(prompt, completion_promise, model, project_dir)
 
             if completed:
                 console.print()
