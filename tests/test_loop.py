@@ -80,6 +80,22 @@ Stack: python
 
 def test_run_loop_completes_and_includes_push_instruction(tmp_path: Path, monkeypatch):
     gralph_dir = _create_gralph_dir(tmp_path)
+    (gralph_dir / "progress.txt").write_text(
+        "# gralph Progress Log\n\n## Evergreen\n"
+        "1. Keep IDs stable.\n"
+        "\n## Learnings\n"
+        "1. Old transient note.\n"
+        "2. Learned 2.\n"
+        "3. Learned 3.\n"
+        "4. Learned 4.\n"
+        "5. Learned 5.\n"
+        "6. Learned 6.\n"
+        "7. Learned 7.\n"
+        "8. Learned 8.\n"
+        "9. Learned 9.\n"
+        "10. Learned 10.\n"
+        "11. Learned 11.\n"
+    )
     _setup_ready_loop(monkeypatch, gralph_dir)
     monkeypatch.setattr(loop_mod.sys.stdin, "isatty", lambda: True)
     monkeypatch.setattr(loop_mod, "prompt_input", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("completion should not prompt")))
@@ -96,6 +112,11 @@ def test_run_loop_completes_and_includes_push_instruction(tmp_path: Path, monkey
     assert len(calls) == 1
     prompt, promise, model, project_dir = calls[0]
     assert "6. Push to remote: git push" in prompt
+    assert "@_PD_/progress.txt" not in prompt
+    assert "MEMORY SNAPSHOT (_PD_/progress.txt)" in prompt
+    assert "- [1] Keep IDs stable." in prompt
+    assert "- [1] Old transient note." not in prompt
+    assert "- [11] Learned 11." in prompt
     assert promise == "<promise>COMPLETE</promise>"
     assert model == "sonnet"
     assert project_dir == gralph_dir.parent
@@ -159,7 +180,7 @@ def test_run_loop_no_tasks_suggests_and_continues(tmp_path: Path, monkeypatch):
 
     assert loop_mod.run_loop(max_iterations=2) is True
     assert generated == [""]
-    assert "- [ ] Add docs ||| test -f README.md" in (gralph_dir / "PRD.md").read_text()
+    assert "Add docs ||| test -f README.md" in (gralph_dir / "PRD.md").read_text()
 
 
 def test_run_loop_no_tasks_accepts_user_instruction(tmp_path: Path, monkeypatch):
@@ -183,3 +204,29 @@ def test_run_loop_no_tasks_accepts_user_instruction(tmp_path: Path, monkeypatch)
 
     assert loop_mod.run_loop(max_iterations=2) is True
     assert captured["instructions"] == ["", "Add metrics endpoint"]
+
+
+def test_run_loop_uses_model_selected_ready_task(tmp_path: Path, monkeypatch):
+    prd = """\
+# PRD
+
+Stack: python
+
+- [ ] [id:g-1111] Add docs ||| test -f README.md
+- [ ] [id:g-2222] Add metrics ||| uv run pytest tests/test_metrics.py
+"""
+    gralph_dir = _create_gralph_dir(tmp_path, prd_text=prd)
+    _setup_ready_loop(monkeypatch, gralph_dir)
+    monkeypatch.setattr(loop_mod, "select_next_ready_task", lambda *args, **kwargs: ("g-2222", None))
+
+    captured_prompts: list[str] = []
+
+    def fake_stream(prompt: str, promise: str, model: str, project_dir: Path):
+        captured_prompts.append(prompt)
+        return True, "done"
+
+    monkeypatch.setattr(loop_mod, "stream_claude_docker", fake_stream)
+
+    assert loop_mod.run_loop(max_iterations=1) is True
+    assert captured_prompts
+    assert "Task ID: g-2222" in captured_prompts[0]

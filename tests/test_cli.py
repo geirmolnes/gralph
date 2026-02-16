@@ -1,4 +1,5 @@
 import typer
+from typer.testing import CliRunner
 
 from gralph import cli
 
@@ -43,3 +44,19 @@ def test_edit_raises_if_editor_not_found(tmp_path, monkeypatch):
         assert False, "Expected typer.Exit"
     except typer.Exit as exc:
         assert exc.exit_code == 1
+
+
+def test_log_appends_numbered_learning(tmp_path, monkeypatch):
+    runner = CliRunner()
+    gralph_dir = tmp_path / ".gralph_planning"
+    gralph_dir.mkdir()
+    (gralph_dir / "progress.txt").write_text(
+        "# gralph Progress Log\n\n## Evergreen\n1. Stable rule.\n\n## Learnings\n1. Existing learning.\n"
+    )
+    monkeypatch.setattr(cli, "find_gralph_dir", lambda: gralph_dir)
+
+    result = runner.invoke(cli.app, ["log", "Added deterministic parser"])
+
+    assert result.exit_code == 0
+    assert "✏️  Logged." in result.output
+    assert "2. Added deterministic parser" in (gralph_dir / "progress.txt").read_text()

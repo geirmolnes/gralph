@@ -9,7 +9,7 @@ Autonomous "Ralph Wiggum" dev loop for project scaffolding and task execution. D
 3. **Loop** - Each iteration: fresh Docker container → implement one task → verify → commit
 4. **Complete** - Loop exits with a run summary (iterations + task deltas)
 
-The "Ralph loop" pattern: stateless iterations with state persisted to files. Claude has no memory between iterations — only what's in `PRD.md`, `progress.txt`, and `PROMPT.md`.
+The "Ralph loop" pattern: stateless iterations with state persisted to files. Claude has no memory between iterations — it sees `PRD.md`, `PROMPT.md`, and a deterministic snapshot from `progress.txt` (all entries in `## Evergreen` + last 10 entries in `## Learnings`).
 
 ## Installation
 
@@ -57,6 +57,10 @@ If there are no pending tasks at run start, `gralph run` offers to generate sugg
 | `gralph bootstrap` | Initialize gralph in current directory |
 | `gralph auth` | Authenticate Claude inside Docker container |
 | `gralph run [max]` | Run the Ralph loop (default: 20 iterations) |
+| `gralph ready` | Show runnable tasks (deps satisfied + unclaimed) |
+| `gralph claim <id>` | Claim a task with a lease for multi-agent safety |
+| `gralph release <id>` | Release an active claim |
+| `gralph stale` | List/prune expired claims |
 | `gralph status` | Show task progress counts |
 | `gralph tasks` | List all tasks with color-coded statuses |
 | `gralph done` | Manually mark current task complete |
@@ -65,7 +69,7 @@ If there are no pending tasks at run start, `gralph run` offers to generate sugg
 | `gralph edit [file]` | Open planning file in editor (`prd`, `prompt`, `progress`) |
 | `gralph lint-prd` | Validate PRD task formatting and show line-level errors |
 | `gralph fix-prd` | Auto-fix common PRD formatting drift |
-| `gralph log <msg>` | Add note to progress log |
+| `gralph log <msg>` | Add numbered learning to progress log |
 | `gralph progress` | View the progress log |
 | `gralph reset` | Reset all tasks to pending |
 | `gralph rebuild` | Force rebuild of Docker sandbox image |
@@ -82,9 +86,12 @@ If there are no pending tasks at run start, `gralph run` offers to generate sugg
 ### `gralph run`
 - `--model` — Claude model (default: sonnet)
 - `--push` — Push to remote after each commit
+- `--owner` — Claim owner identity for this run
 
 ### Run Behavior
 - `gralph run` is non-interactive while tasks are executing.
+- Before each iteration, gralph computes ready tasks from PRD dependencies and active task claims.
+- If multiple tasks are ready, gralph asks the model to prioritize the highest-impact task.
 - If run starts with no pending tasks, gralph can suggest new tasks from the current PRD and codebase context.
 - After task completion, run exits and prints a summary (iterations, task deltas, current totals).
 
@@ -102,7 +109,8 @@ your-project/
 ├── .gralph_planning/
 │   ├── PRD.md        # Task checklist with verification commands
 │   ├── PROMPT.md     # Context for Claude worker
-│   └── progress.txt  # Learnings log
+│   ├── progress.txt  # Numbered memory sections (Evergreen + Learnings)
+│   └── claims.json   # Active task claims with lease expiry
 ├── tests/            # Test directory (auto-created)
 ├── pyproject.toml    # Python: auto-initialized with uv
 └── ... your code
@@ -125,6 +133,35 @@ Each task has a description and verification command:
 - [ ] Add CLI argument parsing ||| python3 main.py --help | grep -q "usage"
 - [x] Install requests library ||| uv pip show requests
 ```
+
+Optional metadata tags can be included in descriptions:
+
+```markdown
+- [ ] [id:g-a1b2] Build auth middleware [deps:g-91ff] ||| uv run pytest tests/test_auth.py
+```
+
+- `[id:...]` provides a stable task identity for claim/release operations.
+- `[deps:task1,task2]` blocks task execution until dependencies are completed/skipped/failed.
+
+### Progress Memory Format
+
+`progress.txt` should use two numbered sections:
+
+```markdown
+## Evergreen
+1. Keep task verifications self-contained.
+2. Prefer deterministic parsing over heuristic parsing.
+
+## Learnings
+1. Added metrics endpoint test fixtures.
+2. Simplified PRD parser edge-case handling.
+3. Replaced note blocks with numbered entries.
+```
+
+- Put durable/reusable rules in `## Evergreen`.
+- Put task/run notes in `## Learnings`.
+- `gralph run` ingests all `## Evergreen` entries plus only the last 10 `## Learnings` entries.
+- Legacy `[evergreen]` tags in `## Learnings` are still recognized during transition.
 
 ## Docker Sandbox
 

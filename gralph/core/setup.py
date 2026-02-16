@@ -2,7 +2,6 @@
 
 import re
 import subprocess
-from datetime import datetime
 from pathlib import Path
 
 from rich.panel import Panel
@@ -223,18 +222,11 @@ def core_setup(goal: str, stack: str, skip_clarify: bool = False, project_dir: P
     (gralph_dir / "PROMPT.md").write_text(prompt_content)
 
     # Initialize progress file
-    progress_content = f"""# gralph Progress Log
+    progress_content = """# gralph Progress Log
 
-## Codebase Patterns
-- 
+## Evergreen
 
 ## Learnings
-
-Project: {goal}
-Stack: {stack}
-Started: {datetime.now().isoformat()}
-
----
 """
     (gralph_dir / "progress.txt").write_text(progress_content)
 
@@ -244,7 +236,7 @@ Started: {datetime.now().isoformat()}
             f"[bold]{GRALPH_DIR}/[/bold]\n"
             f"  ├── PRD.md        [dim]# Task list[/dim]\n"
             f"  ├── PROMPT.md     [dim]# Context for Claude[/dim]\n"
-            f"  └── progress.txt  [dim]# Learnings log[/dim]\n\n"
+            f"  └── progress.txt  [dim]# Evergreen + Learnings memory[/dim]\n\n"
             f"[bold]gralph run[/bold]      Start the loop\n"
             f"[bold]gralph status[/bold]   Show progress\n"
             f"[bold]gralph skip[/bold]     Skip current task\n"

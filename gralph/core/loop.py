@@ -7,9 +7,30 @@ from pathlib import Path
 from gralph import GRALPH_DIR
 from gralph.utils.console import console, prompt_input
 from gralph.utils.paths import find_gralph_dir
-from gralph.prompts import LOOP_PROMPT_TEMPLATE, PUSH_INSTRUCTION, FOLLOW_UP_PROMPT
-from gralph.core.claude import generate_follow_up_tasks
-from gralph.core.prd import append_tasks, count_tasks, lint_prd, validate_prd
+from gralph.prompts import (
+    FOLLOW_UP_PROMPT,
+    LOOP_PROMPT_TEMPLATE,
+    PUSH_INSTRUCTION,
+    TASK_SELECTION_PROMPT,
+)
+from gralph.core.claude import generate_follow_up_tasks, select_next_ready_task
+from gralph.core.claims import (
+    DEFAULT_LEASE_SECONDS,
+    claim_task,
+    default_owner,
+    get_active_claims,
+    release_claim,
+)
+from gralph.core.prd import (
+    append_tasks,
+    count_tasks,
+    ensure_task_ids,
+    get_ready_tasks,
+    get_task_status_by_id,
+    lint_prd,
+    validate_prd,
+)
+from gralph.core.progress import build_memory_snapshot
 from gralph.core.docker import (
     ensure_docker_available,
     ensure_image_exists,
@@ -24,6 +45,85 @@ def _extract_stack(prd_text: str) -> str:
     """Extract stack from PRD header."""
     match = re.search(r"^Stack:\s*(.+)$", prd_text, re.MULTILINE)
     return match.group(1).strip() if match else "python"
+
+
+def _ensure_task_ids_present(gralph_dir: Path) -> None:
+    """Guarantee all task lines have stable unique task IDs."""
+    prd_path = gralph_dir / "PRD.md"
+    prd_text = prd_path.read_text()
+    updated_text, updated = ensure_task_ids(prd_text)
+    if updated > 0:
+        prd_path.write_text(updated_text)
+        console.print(
+            f"[dim]Updated IDs on {updated} task{'s' if updated != 1 else ''}.[/dim]"
+        )
+
+
+def _build_task_locked_prompt(
+    task_id: str,
+    description: str,
+    verification: str,
+    completion_promise: str,
+    push: bool,
+    memory_snapshot: str,
+) -> str:
+    """Build loop prompt locked to one model-selected ready task."""
+    push_instruction = PUSH_INSTRUCTION if push else ""
+    scheduler_block = (
+        "SCHEDULER-SELECTED TASK (MANDATORY):\n"
+        f"- Task ID: {task_id}\n"
+        f"- Description: {description}\n"
+        f"- Verification command: {verification}\n\n"
+        "You MUST work only on this task ID this iteration.\n"
+        "Do not start or complete any other task.\n"
+        "If verification passes, update this exact task in PRD.md.\n\n"
+    )
+    return scheduler_block + LOOP_PROMPT_TEMPLATE.format(
+        memory_snapshot=memory_snapshot,
+        promise=completion_promise,
+        push_instruction=push_instruction,
+    )
+
+
+def _pick_task(
+    gralph_dir: Path,
+    owner: str,
+) -> tuple[object | None, str]:
+    """Pick one ready task (model-ranked when multiple candidates)."""
+    prd_text = (gralph_dir / "PRD.md").read_text()
+    claims = get_active_claims(gralph_dir)
+    unavailable = {
+        task_id
+        for task_id, claim in claims.items()
+        if claim.get("owner") != owner
+    }
+    ready_tasks = get_ready_tasks(prd_text, unavailable_task_ids=unavailable)
+    if not ready_tasks:
+        return None, prd_text
+
+    if len(ready_tasks) == 1:
+        return ready_tasks[0], prd_text
+
+    candidates = [
+        {
+            "task_id": task.task_id or "",
+            "description": task.description,
+            "verification": task.verification,
+            "deps": ", ".join(task.deps),
+        }
+        for task in ready_tasks
+    ]
+    selected_id, error = select_next_ready_task(prd_text, candidates, TASK_SELECTION_PROMPT)
+    if error:
+        console.print(f"[dim]Task prioritization fallback: {error}[/dim]")
+        return ready_tasks[0], prd_text
+
+    for task in ready_tasks:
+        if task.task_id == selected_id:
+            return task, prd_text
+
+    console.print("[dim]Task prioritization fallback: selected id not in ready set.[/dim]")
+    return ready_tasks[0], prd_text
 
 
 def _prompt_for_additional_tasks(gralph_dir: Path) -> bool:
@@ -173,6 +273,7 @@ def run_loop(
     completion_promise: str = "<promise>COMPLETE</promise>",
     model: str = "sonnet",
     push: bool = False,
+    owner: str | None = None,
 ) -> bool:
     """Run the Ralph loop with streaming output inside Docker sandbox."""
     gralph_dir = find_gralph_dir()
@@ -186,8 +287,12 @@ def run_loop(
     if not _check_prd_format(gralph_dir):
         return False
 
+    _ensure_task_ids_present(gralph_dir)
+
     if not _ensure_pending_tasks(gralph_dir):
         return True
+
+    _ensure_task_ids_present(gralph_dir)
 
     start_counts = count_tasks((gralph_dir / "PRD.md").read_text())
 
@@ -212,23 +317,85 @@ def run_loop(
         return False
 
     project_dir = gralph_dir.parent
+    owner = owner or default_owner()
     console.print(f"[bold green]🍩 Running from:[/bold green] {project_dir.name}")
     console.print("[cyan]🐳 Docker sandbox[/cyan]")
+    console.print(f"[dim]Task owner: {owner}[/dim]")
 
     iteration = 0
     try:
         while iteration < max_iterations:
+            pending_count = count_tasks((gralph_dir / "PRD.md").read_text())["pending"]
+            if pending_count == 0:
+                console.print()
+                console.print(f"[bold green]✅ PRD complete after {iteration} iterations![/bold green]")
+                end_counts = count_tasks((gralph_dir / "PRD.md").read_text())
+                _print_run_summary(start_counts, end_counts, iteration)
+                return True
+
+            task, prd_text = _pick_task(gralph_dir, owner)
+            if task is None:
+                console.print(
+                    "[yellow]No ready tasks are currently runnable (blocked by dependencies or claimed by another owner).[/yellow]"
+                )
+                end_counts = count_tasks(prd_text)
+                _print_run_summary(start_counts, end_counts, iteration)
+                return False
+
+            if not task.task_id:
+                _ensure_task_ids_present(gralph_dir)
+                task, prd_text = _pick_task(gralph_dir, owner)
+                if task is None or not task.task_id:
+                    console.print("[red]Ready task is missing an id; run gralph fix-prd and retry.[/red]")
+                    return False
+
+            claimed, claimed_by = claim_task(
+                gralph_dir,
+                task.task_id,
+                owner=owner,
+                lease_seconds=DEFAULT_LEASE_SECONDS,
+            )
+            if not claimed:
+                console.print(
+                    f"[yellow]Task {task.task_id} claimed by {claimed_by}; retrying selection.[/yellow]"
+                )
+                continue
+
             iteration += 1
             console.print()
             console.rule(f"[bold cyan]Iteration {iteration} / {max_iterations}[/bold cyan]")
+            console.print(
+                f"[bold]Task:[/bold] [cyan]{task.task_id}[/cyan] - {task.description}"
+            )
             console.print()
 
-            push_instruction = PUSH_INSTRUCTION if push else ""
-            prompt = LOOP_PROMPT_TEMPLATE.format(
-                promise=completion_promise,
-                push_instruction=push_instruction,
+            prompt = _build_task_locked_prompt(
+                task_id=task.task_id,
+                description=task.description,
+                verification=task.verification,
+                completion_promise=completion_promise,
+                push=push,
+                memory_snapshot=build_memory_snapshot(gralph_dir / "progress.txt"),
             )
             completed, _ = stream_claude_docker(prompt, completion_promise, model, project_dir)
+
+            updated_prd = (gralph_dir / "PRD.md").read_text()
+            task_status = get_task_status_by_id(updated_prd, task.task_id)
+            if task_status in {"x", "~", "!"}:
+                release_claim(
+                    gralph_dir,
+                    task.task_id,
+                    owner=owner,
+                    reason=f"task_{task_status}",
+                )
+            else:
+                # Renew lease if task remains pending for this owner.
+                claim_task(
+                    gralph_dir,
+                    task.task_id,
+                    owner=owner,
+                    lease_seconds=DEFAULT_LEASE_SECONDS,
+                )
 
             if completed:
                 console.print()

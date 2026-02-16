@@ -1,5 +1,6 @@
 """Claude Code interaction."""
 
+import re
 import subprocess
 
 
@@ -48,6 +49,49 @@ def generate_follow_up_tasks(prd_text: str, stack: str, prompt_template: str, us
         tasks = "\n".join(line for line in lines if not line.startswith("```"))
 
     return tasks, None
+
+
+def select_next_ready_task(
+    prd_text: str,
+    ready_tasks: list[dict[str, str]],
+    selection_prompt: str,
+) -> tuple[str | None, str | None]:
+    """
+    Ask Claude to pick the most important task id from the ready set.
+
+    Returns:
+        (task_id, error). Exactly one is None.
+    """
+    if not ready_tasks:
+        return None, "No ready tasks to select from."
+
+    candidate_ids = {t.get("task_id", "").strip() for t in ready_tasks if t.get("task_id")}
+    if not candidate_ids:
+        return None, "Ready tasks are missing task IDs."
+
+    candidates = "\n".join(
+        (
+            f"- {task['task_id']}: {task['description']} ||| {task['verification']}"
+            if not task.get("deps")
+            else f"- {task['task_id']}: {task['description']} [deps: {task['deps']}] ||| {task['verification']}"
+        )
+        for task in ready_tasks
+    )
+
+    prompt = selection_prompt.format(prd=prd_text, candidates=candidates)
+    picked, error = _run_claude_print(prompt, timeout=90)
+    if error or not picked:
+        return None, error
+
+    first_line = picked.strip().splitlines()[0].strip().strip("`")
+    if first_line in candidate_ids:
+        return first_line, None
+
+    for candidate in candidate_ids:
+        if re.search(rf"\b{re.escape(candidate)}\b", picked):
+            return candidate, None
+
+    return None, f"Model returned invalid task id: {first_line}"
 
 
 def get_clarifying_questions(goal: str, stack: str, clarify_prompt: str) -> tuple[str | None, str | None]:

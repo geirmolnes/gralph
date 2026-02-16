@@ -93,6 +93,13 @@ class TestLintPrd:
         errors = lint_prd("- [ ] Build API|||pytest tests/test_api.py\n")
         assert any("canonical task format" in e for e in errors)
 
+    def test_flags_duplicate_task_ids(self):
+        errors = lint_prd(
+            "- [ ] [id:g-1111] Build auth ||| uv run pytest tests/test_auth.py\n"
+            "- [ ] [id:g-1111] Build docs ||| uv run pytest tests/test_docs.py\n"
+        )
+        assert any("Duplicate task id 'g-1111'" in e for e in errors)
+
 
 class TestFixPrdFormat:
     def test_normalizes_common_spacing_and_status(self):

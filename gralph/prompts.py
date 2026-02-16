@@ -104,17 +104,20 @@ Do not modify files unrelated to the current task.
 Only when you are truly done, output the completion promise provided in the task context
 - Only work on a single task per iteration.
 - Update _PD_/PRD.md with progress for that task.
-- Append learnings to _PD_/progress.txt (patterns at the top).
+- Append one numbered learning to _PD_/progress.txt.
+- Durable/reusable rules go under ## Evergreen. Task-specific notes go under ## Learnings.
 - Auth: docker sandbox persists Claude login inside its volume.
 
 ## Important
 - If you discover something useful, mention it so it can be logged.
 - If a task seems impossible, explain why clearly.
 - Check existing files before creating new ones.
-- Log learnings in _PD_/progress.txt; put reusable patterns in ## Codebase Patterns at the top.
+- Keep both sections as numbered lists only (N. text).
 """)
 
-LOOP_PROMPT_TEMPLATE = _sub("""@_PD_/PRD.md @_PD_/progress.txt @_PD_/PROMPT.md
+LOOP_PROMPT_TEMPLATE = _sub("""@_PD_/PRD.md @_PD_/PROMPT.md
+
+{memory_snapshot}
 
 DIRECTORY STRUCTURE:
 - Project code goes in the ROOT directory (.), NOT inside _PD_/
@@ -133,7 +136,10 @@ WORKFLOW:
    - If TDD is not applicable for the task, you may skip creating a test.
 2. Run the verification command for that task.
 3. If verification passes, mark the task done: change '- [ ]' to '- [x]' in _PD_/PRD.md.
-4. Append what you learned to _PD_/progress.txt.
+4. Append exactly one numbered learning to _PD_/progress.txt.
+   - Format: N. <learning>
+   - Durable/reusable rules must be added to ## Evergreen.
+   - Task-specific notes must be added to ## Learnings.
 5. Commit your changes with a descriptive message.{push_instruction}
 ONLY WORK ON A SINGLE TASK PER ITERATION.
 If all tasks are complete (no more '- [ ]'), output: {promise}""")
@@ -181,4 +187,27 @@ CRITICAL FORMAT RULES:
 - Start your response with "- [ ]" on line 1.
 - Each line: - [ ] <description> ||| <verification_command>
 - Use EXACTLY ONE ||| separator per line.
+"""
+
+TASK_SELECTION_PROMPT = """You are selecting the next task for implementation.
+
+You must choose the single most important READY task from the candidate list.
+
+Selection priorities (in order):
+1. Highest unblocking impact (enables additional pending tasks)
+2. Highest risk reduction / correctness
+3. Highest direct user value
+4. Best sequencing for fast progress
+
+Project PRD:
+{prd}
+
+READY TASK CANDIDATES:
+{candidates}
+
+Output format rules:
+- Output ONLY the task id (example: g-a1b2)
+- No explanation
+- No markdown
+- Must be one of the candidate ids
 """

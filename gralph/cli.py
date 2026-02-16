@@ -1,33 +1,42 @@
 """CLI commands for gralph."""
 
-import json
 import os
 import shlex
 import shutil
 import subprocess
-from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
 import typer
 from rich.panel import Panel
-from rich.table import Table
 
-from gralph import __version__, GRALPH_DIR
+from gralph import GRALPH_DIR
 from gralph.utils.console import console, show_version, prompt_input
 from gralph.utils.paths import find_gralph_dir
 from gralph.utils.deps import REQUIRED_TOOLS
 from gralph.core.setup import core_setup, detect_stack
 from gralph.core.loop import run_loop
+from gralph.core.cli_task_ops import (
+    claim_by_id,
+    ensure_unique_ids,
+    fix_prd_file,
+    lint_prd_file,
+    release_by_id,
+    show_ready,
+    show_stale_claims,
+    show_status,
+    show_tasks,
+)
+from gralph.core.claims import (
+    release_claim,
+)
 from gralph.core.prd import (
-    count_tasks,
-    fix_prd_format,
-    lint_prd,
     mark_task,
-    parse_all_tasks,
-    parse_current_task,
+    mark_task_by_id,
+    parse_task_entries,
     reset_all_tasks,
 )
+from gralph.core.progress import append_learning
 
 app = typer.Typer(
     name="gralph",
@@ -78,6 +87,57 @@ def _get_prd_path() -> Path:
         console.print(f"[red]{GRALPH_DIR}/PRD.md not found.[/red]")
         raise typer.Exit(1)
     return prd_path
+
+
+def _require_gralph_dir() -> Path:
+    """Return gralph dir or exit if current directory is not initialized."""
+    gralph_dir = find_gralph_dir()
+    if not gralph_dir:
+        console.print("[red]Not a gralph project.[/red]")
+        raise typer.Exit(1)
+    return gralph_dir
+
+
+def _first_pending_task_id(prd_path: Path) -> str | None:
+    """Return first pending task id after ensuring ids are present."""
+    prd_text = ensure_unique_ids(prd_path)
+    for entry in parse_task_entries(prd_text):
+        if entry.status == " ":
+            return entry.task_id
+    return None
+
+
+def _clear_runtime_state(gralph_dir: Path) -> None:
+    """Clear cached loop state files after manual status updates."""
+    (gralph_dir / ".ralph_error.txt").unlink(missing_ok=True)
+    (gralph_dir / ".ralph_state.json").unlink(missing_ok=True)
+
+
+def _mark_manual_status(
+    task_id: Optional[str],
+    status: str,
+    status_label: str,
+    release_reason: str,
+) -> None:
+    """Apply a manual task status update and synchronize claim state."""
+    gralph_dir = _require_gralph_dir()
+    prd_path = gralph_dir / "PRD.md"
+
+    target_id = task_id or _first_pending_task_id(prd_path)
+    task = mark_task_by_id(prd_path, task_id, status) if task_id else mark_task(prd_path, status)
+
+    if not task:
+        if task_id:
+            console.print(f"[yellow]Task not pending or not found: {task_id}[/yellow]")
+        else:
+            console.print("[yellow]No pending tasks.[/yellow]")
+        raise typer.Exit(0)
+
+    console.print(f"{status_label} {task}")
+    if target_id:
+        release_claim(gralph_dir, target_id, owner=None, reason=release_reason)
+
+    _clear_runtime_state(gralph_dir)
 
 
 @app.callback()
@@ -238,200 +298,119 @@ def run(
     ),
     model: str = typer.Option("sonnet", "--model", help="Claude model to use"),
     push: bool = typer.Option(False, "--push", help="Push to remote after each commit"),
+    owner: Optional[str] = typer.Option(None, "--owner", help="Claim owner identity for this run"),
 ):
     """Run the Ralph loop in Docker sandbox."""
     show_version()
     
-    if not run_loop(max_iterations, completion_promise, model, push=push):
+    if not run_loop(max_iterations, completion_promise, model, push=push, owner=owner):
         raise typer.Exit(1)
 
 
 @app.command()
 def status():
     """Show progress."""
-    gralph_dir = find_gralph_dir()
-    if not gralph_dir:
-        console.print("[red]Not a gralph project.[/red]")
-        raise typer.Exit(1)
+    gralph_dir = _require_gralph_dir()
+    show_status(gralph_dir)
 
-    prd_text = (gralph_dir / "PRD.md").read_text()
-    counts = count_tasks(prd_text)
-    total = sum(counts.values())
 
-    table = Table(title="gralph Status")
-    table.add_column("", style="bold")
-    table.add_column("")
+@app.command()
+def ready(
+    json_output: bool = typer.Option(False, "--json", help="Output machine-readable JSON"),
+):
+    """Show ready-to-run tasks (deps satisfied and not actively claimed)."""
+    gralph_dir = _require_gralph_dir()
+    show_ready(gralph_dir, json_output=json_output)
 
-    table.add_row("✅ Done", f"[green]{counts['completed']}[/green]")
-    table.add_row("⏭️  Skip", f"[yellow]{counts['skipped']}[/yellow]")
-    table.add_row("❌ Fail", f"[red]{counts['failed']}[/red]")
-    table.add_row("⏳ Todo", f"{counts['pending']}")
 
-    if total > 0:
-        table.add_row("📈 Progress", f"{(counts['completed'] / total) * 100:.0f}%")
+@app.command()
+def claim(
+    task_id: str = typer.Argument(..., help="Task id to claim (for example: g-a1b2)"),
+    owner: Optional[str] = typer.Option(None, "--owner", help="Claim owner identity"),
+    ttl_minutes: int = typer.Option(90, "--ttl-minutes", help="Claim lease duration in minutes"),
+):
+    """Claim a specific pending task."""
+    gralph_dir = _require_gralph_dir()
+    claim_by_id(gralph_dir, task_id=task_id, owner=owner, ttl_minutes=ttl_minutes)
 
-    console.print(table)
 
-    current_task = parse_current_task(prd_text)
-    if current_task:
-        console.print(f"\n[bold]Next:[/bold] {current_task}")
-    elif counts['pending'] == 0:
-        console.print("\n[green]All tasks complete![/green]")
+@app.command()
+def release(
+    task_id: str = typer.Argument(..., help="Task id to release"),
+    owner: Optional[str] = typer.Option(None, "--owner", help="Owner identity (defaults to current user)"),
+    force: bool = typer.Option(False, "--force", help="Release regardless of owner"),
+):
+    """Release an active task claim."""
+    gralph_dir = _require_gralph_dir()
+    release_by_id(gralph_dir, task_id=task_id, owner=owner, force=force)
 
-    # Show state if paused mid-task
-    state_file = gralph_dir / ".ralph_state.json"
-    if state_file.exists():
-        try:
-            state = json.loads(state_file.read_text())
-            console.print(
-                f"\n[yellow]⏸️  Paused:[/yellow] {state.get('current_task', 'unknown')}"
-            )
-            console.print(f"[dim]Since: {state.get('timestamp', 'unknown')}[/dim]")
-        except json.JSONDecodeError:
-            pass
 
-    error_file = gralph_dir / ".ralph_error.txt"
-    if error_file.exists():
-        console.print(
-            f"\n[yellow]Last error:[/yellow]\n[dim]{error_file.read_text()[:500]}[/dim]"
-        )
+@app.command()
+def stale(
+    json_output: bool = typer.Option(False, "--json", help="Output machine-readable JSON"),
+    prune: bool = typer.Option(True, "--prune/--no-prune", help="Remove stale claims after listing"),
+):
+    """List stale (expired) claims."""
+    gralph_dir = _require_gralph_dir()
+    show_stale_claims(gralph_dir, json_output=json_output, prune=prune)
 
 
 @app.command("lint-prd")
 def lint_prd_command():
     """Check PRD task-line formatting."""
-    prd_path = _get_prd_path()
-    prd_text = prd_path.read_text()
-    errors = lint_prd(prd_text)
-
-    if errors:
-        console.print("[red]PRD format issues found:[/red]")
-        for err in errors:
-            console.print(f"  [dim]• {err}[/dim]")
-        raise typer.Exit(1)
-
-    total_tasks = sum(count_tasks(prd_text).values())
-    if total_tasks == 0:
-        console.print("[yellow]No task lines found in PRD.[/yellow]")
-    else:
-        console.print(f"[green]PRD format looks good ({total_tasks} tasks).[/green]")
+    lint_prd_file(_get_prd_path())
 
 
 @app.command("fix-prd")
 def fix_prd_command():
     """Auto-normalize common PRD task formatting issues."""
-    prd_path = _get_prd_path()
-    original_text = prd_path.read_text()
-    fixed_text, fixes = fix_prd_format(original_text)
-
-    if fixes > 0:
-        prd_path.write_text(fixed_text)
-        console.print(f"[green]Applied {fixes} PRD formatting fix{'es' if fixes != 1 else ''}.[/green]")
-    else:
-        console.print("[dim]No auto-fixable PRD formatting issues found.[/dim]")
-
-    remaining_errors = lint_prd(prd_path.read_text())
-    if remaining_errors:
-        console.print("[yellow]Remaining issues require manual edits:[/yellow]")
-        for err in remaining_errors:
-            console.print(f"  [dim]• {err}[/dim]")
-        console.print("[yellow]Use 'gralph edit prd' to fix the remaining lines.[/yellow]")
-        raise typer.Exit(1)
-
-    total_tasks = sum(count_tasks(prd_path.read_text()).values())
-    if total_tasks == 0:
-        console.print("[yellow]PRD has no task lines yet.[/yellow]")
-    else:
-        console.print(f"[green]PRD format now valid ({total_tasks} tasks).[/green]")
+    fix_prd_file(_get_prd_path())
 
 
 @app.command()
-def skip():
+def skip(
+    task_id: Optional[str] = typer.Argument(None, help="Optional task id to skip"),
+):
     """Skip current task."""
-    gralph_dir = find_gralph_dir()
-    if not gralph_dir:
-        console.print("[red]Not a gralph project.[/red]")
-        raise typer.Exit(1)
-
-    prd_path = gralph_dir / "PRD.md"
-    task = mark_task(prd_path, "~")
-    
-    if not task:
-        console.print("[yellow]No pending tasks.[/yellow]")
-        raise typer.Exit(0)
-
-    console.print(f"[yellow]⏭️  Skipped:[/yellow] {task}")
-
-    (gralph_dir / ".ralph_error.txt").unlink(missing_ok=True)
-    (gralph_dir / ".ralph_state.json").unlink(missing_ok=True)
+    _mark_manual_status(
+        task_id=task_id,
+        status="~",
+        status_label="[yellow]⏭️  Skipped:[/yellow]",
+        release_reason="manual_skip",
+    )
 
 
 @app.command()
-def done():
+def done(
+    task_id: Optional[str] = typer.Argument(None, help="Optional task id to mark done"),
+):
     """Mark current task done manually."""
-    gralph_dir = find_gralph_dir()
-    if not gralph_dir:
-        console.print("[red]Not a gralph project.[/red]")
-        raise typer.Exit(1)
-
-    prd_path = gralph_dir / "PRD.md"
-    task = mark_task(prd_path, "x")
-    
-    if not task:
-        console.print("[yellow]No pending tasks.[/yellow]")
-        raise typer.Exit(0)
-
-    console.print(f"[green]✅ Done:[/green] {task}")
-
-    (gralph_dir / ".ralph_error.txt").unlink(missing_ok=True)
-    (gralph_dir / ".ralph_state.json").unlink(missing_ok=True)
+    _mark_manual_status(
+        task_id=task_id,
+        status="x",
+        status_label="[green]✅ Done:[/green]",
+        release_reason="manual_done",
+    )
 
 
 @app.command()
 def tasks():
     """List all tasks with color-coded statuses."""
-    gralph_dir = find_gralph_dir()
-    if not gralph_dir:
-        console.print("[red]Not a gralph project.[/red]")
-        raise typer.Exit(1)
-
-    prd_text = (gralph_dir / "PRD.md").read_text()
-    all_tasks = parse_all_tasks(prd_text)
-
-    if not all_tasks:
-        console.print("[yellow]No tasks found.[/yellow]")
-        raise typer.Exit(0)
-
-    style_map = {
-        "x": ("green", "✅"),
-        "~": ("yellow", "⏭️ "),
-        "!": ("red", "❌"),
-        " ": ("white", "⏳"),
-    }
-    for status, desc in all_tasks:
-        color, icon = style_map.get(status, ("white", "  "))
-        console.print(f"  {icon} [{color}]{desc}[/{color}]")
+    gralph_dir = _require_gralph_dir()
+    show_tasks(gralph_dir)
 
 
 @app.command()
-def fail():
+def fail(
+    task_id: Optional[str] = typer.Argument(None, help="Optional task id to mark failed"),
+):
     """Mark current task as failed."""
-    gralph_dir = find_gralph_dir()
-    if not gralph_dir:
-        console.print("[red]Not a gralph project.[/red]")
-        raise typer.Exit(1)
-
-    prd_path = gralph_dir / "PRD.md"
-    task = mark_task(prd_path, "!")
-
-    if not task:
-        console.print("[yellow]No pending tasks.[/yellow]")
-        raise typer.Exit(0)
-
-    console.print(f"[red]❌ Failed:[/red] {task}")
-
-    (gralph_dir / ".ralph_error.txt").unlink(missing_ok=True)
-    (gralph_dir / ".ralph_state.json").unlink(missing_ok=True)
+    _mark_manual_status(
+        task_id=task_id,
+        status="!",
+        status_label="[red]❌ Failed:[/red]",
+        release_reason="manual_fail",
+    )
 
 
 @app.command()
@@ -439,10 +418,7 @@ def edit(
     file: str = typer.Argument("prd", help="File to edit: prd, prompt, or progress"),
 ):
     """Open a planning file in editor."""
-    gralph_dir = find_gralph_dir()
-    if not gralph_dir:
-        console.print("[red]Not a gralph project.[/red]")
-        raise typer.Exit(1)
+    gralph_dir = _require_gralph_dir()
 
     file_map = {
         "prd": "PRD.md",
@@ -477,18 +453,13 @@ def edit(
 
 @app.command()
 def log(
-    message: str = typer.Argument(..., help="Message to add to progress log"),
+    message: str = typer.Argument(..., help="Learning message to append"),
 ):
-    """Add a manual note to the progress log."""
-    gralph_dir = find_gralph_dir()
-    if not gralph_dir:
-        console.print("[red]Not a gralph project.[/red]")
-        raise typer.Exit(1)
+    """Add a numbered learning to the progress log."""
+    gralph_dir = _require_gralph_dir()
 
     progress_file = gralph_dir / "progress.txt"
-    with open(progress_file, "a") as f:
-        f.write(f"\n## [{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] NOTE\n")
-        f.write(f"{message}\n")
+    append_learning(progress_file, message)
 
     console.print("[green]✏️  Logged.[/green]")
 
@@ -496,10 +467,7 @@ def log(
 @app.command()
 def reset():
     """Reset all tasks to pending."""
-    gralph_dir = find_gralph_dir()
-    if not gralph_dir:
-        console.print("[red]Not a gralph project.[/red]")
-        raise typer.Exit(1)
+    gralph_dir = _require_gralph_dir()
 
     if not typer.confirm("Reset all tasks to pending?"):
         raise typer.Abort()
@@ -508,16 +476,15 @@ def reset():
 
     (gralph_dir / ".ralph_error.txt").unlink(missing_ok=True)
     (gralph_dir / ".ralph_state.json").unlink(missing_ok=True)
+    (gralph_dir / "claims.json").unlink(missing_ok=True)
+    (gralph_dir / "claims.lock").unlink(missing_ok=True)
     console.print("[green]All tasks reset.[/green]")
 
 
 @app.command()
 def progress():
     """View the progress log."""
-    gralph_dir = find_gralph_dir()
-    if not gralph_dir:
-        console.print("[red]Not a gralph project.[/red]")
-        raise typer.Exit(1)
+    gralph_dir = _require_gralph_dir()
 
     progress_file = gralph_dir / "progress.txt"
     if not progress_file.exists():

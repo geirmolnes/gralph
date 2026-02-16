@@ -45,3 +45,32 @@ def test_generate_follow_up_tasks_strips_code_fences(monkeypatch):
     )
     assert error is None
     assert tasks == "- [ ] Task ||| test -f x"
+
+
+def test_select_next_ready_task_returns_valid_id(monkeypatch):
+    def fake_run(*args, **kwargs):
+        return _Completed(stdout="g-a1b2")
+
+    monkeypatch.setattr(claude.subprocess, "run", fake_run)
+
+    task_id, error = claude.select_next_ready_task(
+        prd_text="# PRD",
+        ready_tasks=[
+            {
+                "task_id": "g-a1b2",
+                "description": "Add auth",
+                "verification": "uv run pytest tests/test_auth.py",
+                "deps": "",
+            },
+            {
+                "task_id": "g-c3d4",
+                "description": "Add docs",
+                "verification": "uv run pytest tests/test_docs.py",
+                "deps": "",
+            },
+        ],
+        selection_prompt="{prd}\n{candidates}",
+    )
+
+    assert error is None
+    assert task_id == "g-a1b2"
