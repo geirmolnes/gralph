@@ -2,12 +2,9 @@
 
 from gralph import GRALPH_DIR
 
-_D = GRALPH_DIR
-
-
 def _sub(template: str) -> str:
     """Replace _PD_ placeholder with the planning directory name."""
-    return template.replace("_PD_", _D)
+    return template.replace("_PD_", GRALPH_DIR)
 
 
 CLARIFY_PROMPT = """You are a Lead Software Architect gathering requirements. The user wants to build:
