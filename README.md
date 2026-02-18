@@ -4,10 +4,13 @@ Autonomous "Ralph Wiggum" dev loop for project scaffolding and task execution. D
 
 ## How It Works
 
-1. **Bootstrap** - Describe what you want to build, answer clarifying questions
-2. **Plan** - Claude generates an atomic task list with verification commands
-3. **Loop** - Each iteration: fresh Docker container → implement one task → verify → commit
-4. **Complete** - Loop exits with a run summary (iterations + task deltas)
+1. **Interview** — Multi-round guided Q&A to understand scope, features, and constraints
+2. **Epics** — Claude estimates complexity (S/M/L/XL) and generates high-level milestones you can review/edit
+3. **Expand** — Each epic is expanded into atomic tasks with verification commands, scaled to complexity
+4. **Loop** — Each iteration: fresh Docker container → implement one task → verify → commit
+5. **Complete** — Loop exits with a run summary (iterations + task deltas)
+
+Use `--quick` to skip the interview and epic review, falling back to single-shot flat task generation.
 
 The "Ralph loop" pattern: stateless iterations with state persisted to files. Claude has no memory between iterations — it sees `PRD.md`, `PROMPT.md`, and a deterministic snapshot from `progress.txt` (all entries in `## Evergreen` + last 10 entries in `## Learnings`).
 
@@ -80,7 +83,7 @@ If there are no pending tasks at run start, `gralph run` offers to generate sugg
 ### `gralph init` / `gralph bootstrap`
 - `-g, --goal` — What to build
 - `-s, --stack` — Tech stack (default: python)
-- `-q, --quick` — Skip clarifying questions
+- `-q, --quick` — Skip interview, generate flat task list in one shot
 - `--goal-file` — Path to a text/markdown file with project context
 
 ### `gralph run`
@@ -110,6 +113,7 @@ your-project/
 │   ├── PRD.md        # Task checklist with verification commands
 │   ├── PROMPT.md     # Context for Claude worker
 │   ├── progress.txt  # Numbered memory sections (Evergreen + Learnings)
+│   ├── epics.md      # Epic milestones (generated during planning, editable)
 │   └── claims.json   # Active task claims with lease expiry
 ├── tests/            # Test directory (auto-created)
 ├── pyproject.toml    # Python: auto-initialized with uv
@@ -126,12 +130,20 @@ This ensures the project is ready to go before Claude starts working.
 
 ### PRD Format
 
-Each task has a description and verification command:
+Tasks are grouped under epic section headers. The task parser only matches `- [` lines, so headers are ignored by the loop.
 
 ```markdown
-- [ ] Create main.py with hello world ||| python3 main.py | grep -q "hello"
-- [ ] Add CLI argument parsing ||| python3 main.py --help | grep -q "usage"
-- [x] Install requests library ||| uv pip show requests
+# PRD: My Project
+
+Stack: python
+
+## Setup & Infrastructure
+- [ ] [id:g-a1b2] Initialize project with uv, install rich and typer ||| uv pip show typer
+- [ ] [id:g-c3d4] Create project directory structure ||| test -d src && test -d tests
+
+## Data Layer
+- [ ] [id:g-e5f6] Create src/db.py with SQLite connection helper ||| uv run pytest tests/test_db.py
+- [x] [id:g-g7h8] Install requests library ||| uv pip show requests
 ```
 
 Optional metadata tags can be included in descriptions:

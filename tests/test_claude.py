@@ -21,13 +21,13 @@ def test_scan_codebase_handles_missing_claude(monkeypatch):
     assert "Claude CLI not found" in error
 
 
-def test_generate_prd_handles_timeout(monkeypatch):
+def test_generate_prd_flat_handles_timeout(monkeypatch):
     def fake_run(*args, **kwargs):
         raise subprocess.TimeoutExpired(cmd=["claude"], timeout=180)
 
     monkeypatch.setattr(claude.subprocess, "run", fake_run)
 
-    output, error = claude.generate_prd("goal", "python", "{goal} {stack} {clarifications}")
+    output, error = claude.generate_prd_flat("goal", "python")
     assert output is None
     assert error == "Claude request timed out after 180s"
 

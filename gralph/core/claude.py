@@ -3,6 +3,15 @@
 import re
 import subprocess
 
+from gralph.prompts import (
+    INTERVIEW_START_PROMPT,
+    INTERVIEW_FOLLOWUP_PROMPT,
+    EPIC_PROMPT,
+    EXPAND_PROMPT,
+    ARCHITECT_PROMPT_FLAT,
+    COMPLEXITY_RANGES,
+)
+
 
 def _run_claude_print(prompt: str, timeout: int = 180) -> tuple[str | None, str | None]:
     """Run `claude --print` with consistent error handling."""
@@ -29,7 +38,7 @@ def scan_codebase(scan_prompt: str) -> tuple[str | None, str | None]:
 
 
 def generate_follow_up_tasks(prd_text: str, stack: str, prompt_template: str, user_instruction: str = "") -> tuple[str | None, str | None]:
-    """Generate follow-up tasks based on current PRD state and optional user input."""
+    """Generate follow-up tasks based on current PRD state."""
     if user_instruction:
         instruction = f"The user wants to continue with:\n{user_instruction}"
     else:
@@ -56,12 +65,7 @@ def select_next_ready_task(
     ready_tasks: list[dict[str, str]],
     selection_prompt: str,
 ) -> tuple[str | None, str | None]:
-    """
-    Ask Claude to pick the most important task id from the ready set.
-
-    Returns:
-        (task_id, error). Exactly one is None.
-    """
+    """Ask Claude to pick the most important task id from the ready set."""
     if not ready_tasks:
         return None, "No ready tasks to select from."
 
@@ -94,39 +98,163 @@ def select_next_ready_task(
     return None, f"Model returned invalid task id: {first_line}"
 
 
-def get_clarifying_questions(goal: str, stack: str, clarify_prompt: str) -> tuple[str | None, str | None]:
+# ---------- Interview functions ----------
+
+def get_interview_questions(
+    goal: str,
+    stack: str,
+    conversation_so_far: str = "",
+) -> tuple[str | None, bool, str | None]:
+    """Run one round of the interview loop.
+
+    Returns (text, is_done, error).
+    - If is_done=True, text is the DONE: summary block.
+    - Otherwise text is follow-up questions.
     """
-    Get clarifying questions from Claude.
-    
-    Returns:
-        Tuple of (questions, error_message). One will be None.
-    """
-    prompt = clarify_prompt.format(goal=goal, stack=stack)
-    return _run_claude_print(prompt, timeout=120)
+    if not conversation_so_far:
+        prompt = INTERVIEW_START_PROMPT.format(goal=goal, stack=stack)
+    else:
+        prompt = INTERVIEW_FOLLOWUP_PROMPT.format(
+            goal=goal, stack=stack, conversation=conversation_so_far,
+        )
+
+    raw, error = _run_claude_print(prompt, timeout=120)
+    if error or raw is None:
+        return None, False, error
+
+    if raw.strip().startswith("DONE:"):
+        return raw.strip(), True, None
+
+    return raw.strip(), False, None
 
 
-def generate_prd(goal: str, stack: str, architect_prompt: str, clarifications: str = "") -> tuple[str | None, str | None]:
+def parse_interview_summary(raw: str) -> tuple[str, str]:
+    """Extract structured summary and complexity from DONE: output.
+
+    Returns (summary_text, complexity) where complexity is S/M/L/XL.
     """
-    Generate a PRD using Claude.
-    
-    Args:
-        goal: Project goal
-        stack: Technology stack
-        architect_prompt: The architect prompt template
-        clarifications: Additional context from clarifying Q&A
-    
-    Returns:
-        Tuple of (prd_content, error_message). One will be None.
-    """
+    complexity = "M"  # default
+    for line in raw.splitlines():
+        stripped = line.strip()
+        if stripped.lower().startswith("complexity:"):
+            val = stripped.split(":", 1)[1].strip().upper()
+            if val and val[0] in {"S", "M", "L", "X"}:
+                complexity = "XL" if val.startswith("XL") else val[0]
+
+    # The full DONE: block is the summary (minus the DONE: prefix)
+    summary = raw
+    if summary.startswith("DONE:"):
+        summary = summary[5:].strip()
+
+    return summary, complexity
+
+
+# ---------- Epic generation ----------
+
+def generate_epics(
+    goal: str,
+    stack: str,
+    interview_summary: str,
+    complexity: str = "M",
+) -> tuple[str | None, str | None]:
+    """Generate high-level epics. Returns (epics_markdown, error)."""
+    ranges = COMPLEXITY_RANGES.get(complexity, COMPLEXITY_RANGES["M"])
+    lo, hi = ranges["epics"]
+    epic_range = f"{lo}-{hi}"
+
+    prompt = EPIC_PROMPT.format(
+        goal=goal,
+        stack=stack,
+        interview_summary=interview_summary or "(no additional context)",
+        complexity=complexity,
+        epic_range=epic_range,
+    )
+
+    raw, error = _run_claude_print(prompt, timeout=120)
+    if error or raw is None:
+        return None, error
+
+    # Strip markdown code fences
+    if raw.startswith("```"):
+        lines = raw.split("\n")
+        raw = "\n".join(line for line in lines if not line.startswith("```"))
+
+    return raw.strip(), None
+
+
+def parse_epics(epics_text: str) -> list[dict[str, str]]:
+    """Parse epic markdown into list of {name, description}."""
+    epics: list[dict[str, str]] = []
+    current_name = ""
+    current_lines: list[str] = []
+
+    for line in epics_text.splitlines():
+        header_match = re.match(r"^##\s+\d+\.\s+(.+)$", line.strip())
+        if header_match:
+            if current_name:
+                epics.append({
+                    "name": current_name,
+                    "description": "\n".join(current_lines).strip(),
+                })
+            current_name = header_match.group(1).strip()
+            current_lines = []
+        elif current_name:
+            current_lines.append(line)
+
+    if current_name:
+        epics.append({
+            "name": current_name,
+            "description": "\n".join(current_lines).strip(),
+        })
+
+    return epics
+
+
+def expand_epic(
+    goal: str,
+    stack: str,
+    epic: dict[str, str],
+    all_epics_text: str,
+    task_target: int,
+) -> tuple[str | None, str | None]:
+    """Expand a single epic into atomic tasks. Returns (task_lines, error)."""
+    prompt = EXPAND_PROMPT.format(
+        goal=goal,
+        stack=stack,
+        all_epics=all_epics_text,
+        task_target=task_target,
+        epic_name=epic["name"],
+        epic_description=epic["description"],
+    )
+
+    raw, error = _run_claude_print(prompt, timeout=180)
+    if error or raw is None:
+        return None, error
+
+    # Strip markdown code fences
+    if raw.startswith("```"):
+        lines = raw.split("\n")
+        raw = "\n".join(line for line in lines if not line.startswith("```"))
+
+    return raw.strip(), None
+
+
+# ---------- Flat single-shot (--quick fallback) ----------
+
+def generate_prd_flat(
+    goal: str,
+    stack: str,
+    clarifications: str = "",
+) -> tuple[str | None, str | None]:
+    """Generate a flat PRD in one shot (--quick mode)."""
     clarification_text = f"\nAdditional context:\n{clarifications}\n" if clarifications else ""
-    prompt = architect_prompt.format(goal=goal, stack=stack, clarifications=clarification_text)
+    prompt = ARCHITECT_PROMPT_FLAT.format(goal=goal, stack=stack, clarifications=clarification_text)
     ai_prd, error = _run_claude_print(prompt, timeout=180)
     if error or ai_prd is None:
         return None, error
-    
-    # Strip markdown code blocks if present
+
     if ai_prd.startswith("```"):
         lines = ai_prd.split("\n")
         ai_prd = "\n".join(line for line in lines if not line.startswith("```"))
-    
+
     return ai_prd, None

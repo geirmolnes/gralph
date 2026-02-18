@@ -7,7 +7,9 @@ def _sub(template: str) -> str:
     return template.replace("_PD_", GRALPH_DIR)
 
 
-CLARIFY_PROMPT = """You are a Lead Software Architect gathering requirements. The user wants to build:
+# ---------- Interview prompts (replace old CLARIFY_PROMPT) ----------
+
+INTERVIEW_START_PROMPT = """You are a Lead Software Architect gathering requirements. The user wants to build:
 
 Goal: "{goal}"
 Stack: {stack}
@@ -25,7 +27,93 @@ Example:
 3. What's the expected input format?
 """
 
-ARCHITECT_PROMPT = """You are a Lead Software Architect. I want to build: "{goal}"
+INTERVIEW_FOLLOWUP_PROMPT = """You are a Lead Software Architect gathering requirements. The user wants to build:
+
+Goal: "{goal}"
+Stack: {stack}
+
+Here is the conversation so far:
+{conversation}
+
+Based on the answers, decide:
+- If you need more info: ask 2-3 SHORT follow-up questions (numbered, same format as before).
+- If you have enough info: output EXACTLY this format:
+
+DONE:
+Features: <comma-separated feature list>
+Constraints: <key constraints or "none">
+Complexity: <S|M|L|XL>
+Epic count: <recommended number of epics>
+Summary: <2-3 sentence structured summary of what to build>
+
+Choose complexity based on:
+- S: Simple script/tool, 1-2 features
+- M: Small app with 3-5 features, some integration
+- L: Multi-component system, 5-8 features, auth/DB/API
+- XL: Full-stack platform, 8+ features, multiple services
+
+Do NOT explain your reasoning. Output either questions OR the DONE block, nothing else.
+"""
+
+# ---------- Epic + expand prompts (replace old ARCHITECT_PROMPT) ----------
+
+EPIC_PROMPT = """You are a Lead Software Architect. Plan the project:
+
+Goal: "{goal}"
+Stack: {stack} (use 'uv' for python, 'bun' for javascript)
+
+Interview summary:
+{interview_summary}
+
+Complexity: {complexity} (target {epic_range} epics)
+
+Generate high-level epics (milestones). Each epic groups related work.
+Order logically: setup/infra first, core features, then polish/integration.
+
+FORMAT: Output ONLY this format, no introduction:
+
+## 1. Epic Name
+1-2 sentence description of what this epic covers.
+
+## 2. Epic Name
+1-2 sentence description.
+
+(continue for each epic)
+"""
+
+EXPAND_PROMPT = """You are a Lead Software Architect. Expand one epic into atomic tasks.
+
+Project goal: "{goal}"
+Stack: {stack} (use 'uv' for python, 'bun' for javascript)
+
+Full epic list (for context):
+{all_epics}
+
+Now expand THIS epic into ~{task_target} atomic tasks:
+## {epic_name}
+{epic_description}
+
+TASK PLANNING:
+- Each task = one clear action + one verification command.
+- Install dependencies BEFORE tasks that use them.
+- Keep tasks atomic: one meaningful unit of work each.
+
+VERIFICATION RULES:
+- Prefer `uv run pytest tests/test_X.py` (Python) or `bun test` (JS) for verification.
+- Use shell commands (grep, test -f, etc.) only for infra tasks.
+- Verification must be self-contained: no running servers, no network calls.
+- Verification commands must return exit code 0 on success.
+
+CRITICAL FORMAT RULES:
+- Output ONLY a markdown checklist. No introduction. No explanation. No code blocks.
+- Start your response with "- [ ]" on line 1.
+- Each line: - [ ] <description> ||| <verification_command>
+- Use EXACTLY ONE ||| separator per line.
+"""
+
+# ---------- Flat single-shot prompt (kept for --quick mode) ----------
+
+ARCHITECT_PROMPT_FLAT = """You are a Lead Software Architect. I want to build: "{goal}"
 Stack: {stack} (use 'uv' for python, 'bun' for javascript).
 {clarifications}
 Break this down into a list of ATOMIC tasks in logical order.
@@ -208,3 +296,12 @@ Output format rules:
 - No markdown
 - Must be one of the candidate ids
 """
+
+# ---------- Complexity heuristics ----------
+
+COMPLEXITY_RANGES: dict[str, dict[str, tuple[int, int]]] = {
+    "S":  {"epics": (2, 3), "tasks_per_epic": (2, 3)},
+    "M":  {"epics": (3, 5), "tasks_per_epic": (3, 5)},
+    "L":  {"epics": (5, 7), "tasks_per_epic": (4, 7)},
+    "XL": {"epics": (6, 8), "tasks_per_epic": (5, 8)},
+}
