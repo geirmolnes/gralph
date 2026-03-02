@@ -100,7 +100,7 @@ def test_run_loop_completes_and_includes_push_instruction(tmp_path: Path, monkey
 
     calls: list[tuple[str, str, str, Path]] = []
 
-    def fake_stream(prompt: str, promise: str, model: str, project_dir: Path):
+    def fake_stream(prompt: str, promise: str, model: str, project_dir: Path, **kwargs):
         calls.append((prompt, promise, model, project_dir))
         return True, f"done {promise}"
 
@@ -123,7 +123,7 @@ def test_run_loop_completes_and_includes_push_instruction(tmp_path: Path, monkey
 def test_run_loop_prints_summary_on_completion(tmp_path: Path, monkeypatch):
     gralph_dir = _create_gralph_dir(tmp_path)
     _setup_ready_loop(monkeypatch, gralph_dir)
-    monkeypatch.setattr(loop_mod, "stream_claude_docker", lambda *args, **kwargs: (True, "done"))
+    monkeypatch.setattr(loop_mod, "stream_claude_docker", lambda *a, **kw: (True, "done"))
 
     printed: list[str] = []
     monkeypatch.setattr(loop_mod.console, "print", lambda *args, **kwargs: printed.append(" ".join(str(a) for a in args)))
@@ -138,7 +138,7 @@ def test_run_loop_stops_after_max_iterations(tmp_path: Path, monkeypatch):
 
     count = {"n": 0}
 
-    def fake_stream(prompt: str, promise: str, model: str, project_dir: Path):
+    def fake_stream(prompt: str, promise: str, model: str, project_dir: Path, **kwargs):
         count["n"] += 1
         return False, "still working"
 
@@ -171,7 +171,7 @@ Stack: python
 
     captured_prompts: list[str] = []
 
-    def fake_stream(prompt: str, promise: str, model: str, project_dir: Path):
+    def fake_stream(prompt: str, promise: str, model: str, project_dir: Path, **kwargs):
         captured_prompts.append(prompt)
         return True, "done"
 

@@ -192,32 +192,6 @@ def authenticate_container(image_name: str = "gralph-sandbox") -> bool:
     return check_container_auth(image_name)
 
 
-def run_claude_docker_interactive(
-    prompt: str,
-    model: str = "sonnet",
-    project_dir: Path | None = None,
-    image_name: str = "gralph-sandbox",
-) -> int:
-    """Run Claude interactively with agent teams enabled. Returns exit code."""
-    if project_dir is None:
-        project_dir = Path.cwd()
-
-    cmd = [
-        "docker", "run",
-        "--rm", "-it",
-        "-v", f"{project_dir.absolute()}:/workspace",
-        "-v", f"{VOLUME_NAME}:{CLAUDE_HOME}",
-        "-w", "/workspace",
-        "-e", "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1",
-        image_name,
-        "--dangerously-skip-permissions",
-        "--model", model,
-        "-p", prompt,
-    ]
-
-    result = subprocess.run(cmd)
-    return result.returncode
-
 
 def stream_claude_docker(
     prompt: str,
@@ -225,28 +199,34 @@ def stream_claude_docker(
     model: str = "sonnet",
     project_dir: Path = None,
     image_name: str = "gralph-sandbox",
+    agent_teams: bool = False,
 ) -> tuple[bool, str]:
     """
     Run Claude inside Docker with streaming output.
-    
+
     Args:
         prompt: The prompt to send to Claude
         completion_promise: Token that signals task completion
         model: Claude model to use
         project_dir: Project directory to mount (defaults to cwd)
         image_name: Docker image name
-    
+        agent_teams: Enable Claude agent teams
+
     Returns:
         Tuple of (completed, full_output) where completed is True if promise was found.
     """
     if project_dir is None:
         project_dir = Path.cwd()
-    
+
     # Build docker run command
     cmd = [
         "docker", "run",
         "--rm",
         "-i",
+    ]
+    if agent_teams:
+        cmd += ["-e", "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1"]
+    cmd += [
         # Mount project directory
         "-v", f"{project_dir.absolute()}:/workspace",
         # Mount Claude config volume (read-write for session data)

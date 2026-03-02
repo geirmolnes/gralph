@@ -164,6 +164,7 @@ def run_loop(
     model: str = "sonnet",
     push: bool = False,
     owner: str | None = None,
+    agent_teams: bool = False,
 ) -> bool:
     """Run the Ralph loop with streaming output inside Docker sandbox."""
     gralph_dir = find_gralph_dir()
@@ -264,7 +265,7 @@ def run_loop(
                 push=push,
                 memory_snapshot=build_memory_snapshot(gralph_dir / "progress.txt"),
             )
-            completed, _ = stream_claude_docker(prompt, completion_promise, model, project_dir)
+            completed, _ = stream_claude_docker(prompt, completion_promise, model, project_dir, agent_teams=agent_teams)
 
             updated_prd = (gralph_dir / "PRD.md").read_text()
             task_status = get_task_status_by_id(updated_prd, task.task_id)
