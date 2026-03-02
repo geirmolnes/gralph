@@ -185,5 +185,11 @@ def tasks():
     show_tasks(gralph_dir)
 
 
+@app.command()
+def version():
+    """Show gralph version."""
+    show_version()
+
+
 if __name__ == "__main__":
     app()
