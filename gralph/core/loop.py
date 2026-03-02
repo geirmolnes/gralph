@@ -10,6 +10,7 @@ from gralph.prompts import (
     LOOP_PROMPT_TEMPLATE,
     PUSH_INSTRUCTION,
     TASK_SELECTION_PROMPT,
+    TEAM_PROMPT_TEMPLATE,
 )
 from gralph.core.claude import select_next_ready_task
 from gralph.core.claims import (
@@ -72,6 +73,25 @@ def _build_task_locked_prompt(
         memory_snapshot=memory_snapshot,
         promise=completion_promise,
         push_instruction=push_instruction,
+    )
+
+
+def _build_team_prompt(
+    task_id: str,
+    description: str,
+    verification: str,
+    memory_snapshot: str,
+    gralph_dir: Path,
+) -> str:
+    """Build team prompt that instructs Claude to spawn sub-agents."""
+    prompt_md_path = gralph_dir / "PROMPT.md"
+    prompt_md = prompt_md_path.read_text() if prompt_md_path.exists() else ""
+    return TEAM_PROMPT_TEMPLATE.format(
+        task_id=task_id,
+        description=description,
+        verification=verification,
+        prompt_md=prompt_md,
+        memory_snapshot=memory_snapshot,
     )
 
 
@@ -257,14 +277,24 @@ def run_loop(
             )
             console.print()
 
-            prompt = _build_task_locked_prompt(
-                task_id=task.task_id,
-                description=task.description,
-                verification=task.verification,
-                completion_promise=completion_promise,
-                push=push,
-                memory_snapshot=build_memory_snapshot(gralph_dir / "progress.txt"),
-            )
+            mem = build_memory_snapshot(gralph_dir / "progress.txt")
+            if agent_teams:
+                prompt = _build_team_prompt(
+                    task_id=task.task_id,
+                    description=task.description,
+                    verification=task.verification,
+                    memory_snapshot=mem,
+                    gralph_dir=gralph_dir,
+                )
+            else:
+                prompt = _build_task_locked_prompt(
+                    task_id=task.task_id,
+                    description=task.description,
+                    verification=task.verification,
+                    completion_promise=completion_promise,
+                    push=push,
+                    memory_snapshot=mem,
+                )
             completed, _ = stream_claude_docker(prompt, completion_promise, model, project_dir, agent_teams=agent_teams)
 
             updated_prd = (gralph_dir / "PRD.md").read_text()
