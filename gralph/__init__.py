@@ -11,4 +11,4 @@ try:
 except PackageNotFoundError:
     __version__ = "dev"
 
-GRALPH_DIR = ".gralph_planning"
+GRALPH_DIR = "gralph"

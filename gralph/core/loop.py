@@ -1,19 +1,17 @@
 """The Ralph loop - iterative task execution."""
 
-import re
 import sys
 from pathlib import Path
 
 from gralph import GRALPH_DIR
-from gralph.utils.console import console, prompt_input
+from gralph.utils.console import console
 from gralph.utils.paths import find_gralph_dir
 from gralph.prompts import (
-    FOLLOW_UP_PROMPT,
     LOOP_PROMPT_TEMPLATE,
     PUSH_INSTRUCTION,
     TASK_SELECTION_PROMPT,
 )
-from gralph.core.claude import generate_follow_up_tasks, select_next_ready_task
+from gralph.core.claude import select_next_ready_task
 from gralph.core.claims import (
     DEFAULT_LEASE_SECONDS,
     claim_task,
@@ -22,13 +20,11 @@ from gralph.core.claims import (
     release_claim,
 )
 from gralph.core.prd import (
-    append_tasks,
     count_tasks,
     ensure_task_ids,
     get_ready_tasks,
     get_task_status_by_id,
     lint_prd,
-    validate_prd,
 )
 from gralph.core.progress import build_memory_snapshot
 from gralph.core.docker import (
@@ -39,12 +35,6 @@ from gralph.core.docker import (
     fix_volume_permissions,
     stream_claude_docker,
 )
-
-
-def _extract_stack(prd_text: str) -> str:
-    """Extract stack from PRD header."""
-    match = re.search(r"^Stack:\s*(.+)$", prd_text, re.MULTILINE)
-    return match.group(1).strip() if match else "python"
 
 
 def ensure_task_ids_present(gralph_dir: Path) -> None:
@@ -126,105 +116,6 @@ def pick_task(
     return ready_tasks[0], prd_text
 
 
-def _prompt_for_additional_tasks(gralph_dir: Path) -> bool:
-    """Prompt for task generation when PRD has no pending tasks."""
-    prd_path = gralph_dir / "PRD.md"
-
-    choice = prompt_input(
-        "No tasks available. What should gralph do next?",
-        hint=(
-            "1. Suggest tasks from recent PRD history and current codebase "
-            "(you can refine after suggestions)\n"
-            "2. Cancel"
-        ),
-        default="1",
-        required=False,
-    ).strip().lower()
-    if choice in {"2", "cancel", "c", "q", "quit", "exit"}:
-        console.print("[yellow]Cancelled. No new tasks added.[/yellow]")
-        return False
-
-    if choice not in {"", "1", "suggest", "s"}:
-        console.print("[yellow]Please enter 1 or 2.[/yellow]")
-        return _prompt_for_additional_tasks(gralph_dir)
-
-    user_instruction = ""
-    while True:
-        if user_instruction:
-            console.print("\n[bold green]🧠 Regenerating tasks with your refinement...[/bold green]")
-        else:
-            console.print("\n[bold green]🧠 Scanning recent tasks and codebase for suggestions...[/bold green]")
-
-        prd_text = prd_path.read_text()
-        stack = _extract_stack(prd_text)
-        new_tasks, error = generate_follow_up_tasks(
-            prd_text,
-            stack,
-            FOLLOW_UP_PROMPT,
-            user_instruction=user_instruction,
-        )
-
-        if error:
-            console.print(f"[red]Failed to generate tasks: {error}[/red]")
-            continue
-        if not new_tasks or "|||" not in new_tasks:
-            console.print("[yellow]No valid tasks generated. Try again.[/yellow]")
-            continue
-
-        is_valid, errors = validate_prd(new_tasks)
-        if not is_valid:
-            console.print("[yellow]Generated tasks have format issues:[/yellow]")
-            for err in errors:
-                console.print(f"  [dim]• {err}[/dim]")
-
-        console.print("\n[cyan]Proposed tasks:[/cyan]")
-        console.print(new_tasks)
-
-        action = prompt_input(
-            "Add these tasks to PRD?",
-            hint=(
-                "Press Enter for yes, type a refinement to regenerate, or type "
-                "'cancel' to stop."
-            ),
-            required=False,
-        ).strip()
-        lowered = action.lower()
-
-        if lowered in {"cancel", "c", "q", "quit", "exit"}:
-            console.print("[yellow]Cancelled. No new tasks added.[/yellow]")
-            return False
-
-        if lowered in {"", "y", "yes"}:
-            count = append_tasks(prd_path, new_tasks)
-            if count == 0:
-                console.print("[yellow]No tasks to add.[/yellow]")
-                user_instruction = ""
-                continue
-
-            console.print(f"[green]Added {count} new task{'s' if count != 1 else ''} to PRD.[/green]")
-            return True
-
-        if lowered in {"n", "no"}:
-            user_instruction = ""
-            continue
-
-        user_instruction = action
-
-
-def _ensure_pending_tasks(gralph_dir: Path) -> bool:
-    """Ensure there is at least one pending PRD task before running the loop."""
-    prd_text = (gralph_dir / "PRD.md").read_text()
-    if count_tasks(prd_text)["pending"] > 0:
-        return True
-
-    console.print("\n[yellow]No tasks available in PRD.[/yellow]")
-    if not sys.stdin.isatty():
-        console.print("[yellow]Non-interactive session detected. Nothing to run.[/yellow]")
-        return False
-
-    return _prompt_for_additional_tasks(gralph_dir)
-
-
 def check_prd_format(gralph_dir: Path) -> bool:
     """Validate PRD formatting before entering the execution loop."""
     prd_text = (gralph_dir / "PRD.md").read_text()
@@ -239,8 +130,7 @@ def check_prd_format(gralph_dir: Path) -> bool:
         console.print(f"  [dim]• ...and {len(errors) - 20} more[/dim]")
 
     console.print(
-        "\n[yellow]Run [bold]gralph lint-prd[/bold] for details or "
-        "[bold]gralph fix-prd[/bold] to normalize common formatting issues.[/yellow]"
+        "\n[yellow]Fix PRD task formatting and try again.[/yellow]"
     )
     return False
 
@@ -278,10 +168,7 @@ def run_loop(
     """Run the Ralph loop with streaming output inside Docker sandbox."""
     gralph_dir = find_gralph_dir()
     if not gralph_dir:
-        console.print("[red]Not a gralph project.[/red]")
-        console.print(
-            "Run [bold]gralph init[/bold] or [bold]gralph bootstrap[/bold] first."
-        )
+        console.print("[red]Not a gralph project. No gralph/PRD.md found.[/red]")
         return False
 
     if not check_prd_format(gralph_dir):
@@ -289,12 +176,13 @@ def run_loop(
 
     ensure_task_ids_present(gralph_dir)
 
-    if not _ensure_pending_tasks(gralph_dir):
+    # No pending tasks → nothing to do
+    prd_text = (gralph_dir / "PRD.md").read_text()
+    if count_tasks(prd_text)["pending"] == 0:
+        console.print("[green]No pending tasks. PRD is complete.[/green]")
         return True
 
-    ensure_task_ids_present(gralph_dir)
-
-    start_counts = count_tasks((gralph_dir / "PRD.md").read_text())
+    start_counts = count_tasks(prd_text)
 
     # Setup Docker sandbox
     if not ensure_docker_available():
@@ -318,8 +206,7 @@ def run_loop(
 
     project_dir = gralph_dir.parent
     owner = owner or default_owner()
-    console.print(f"[bold green]🍩 Running from:[/bold green] {project_dir.name}")
-    console.print("[cyan]🐳 Docker sandbox[/cyan]")
+    console.print(f"[bold green]Running from:[/bold green] {project_dir.name}")
     console.print(f"[dim]Task owner: {owner}[/dim]")
 
     iteration = 0
@@ -328,7 +215,7 @@ def run_loop(
             pending_count = count_tasks((gralph_dir / "PRD.md").read_text())["pending"]
             if pending_count == 0:
                 console.print()
-                console.print(f"[bold green]✅ PRD complete after {iteration} iterations![/bold green]")
+                console.print(f"[bold green]PRD complete after {iteration} iterations![/bold green]")
                 end_counts = count_tasks((gralph_dir / "PRD.md").read_text())
                 _print_run_summary(start_counts, end_counts, iteration)
                 return True
@@ -346,7 +233,7 @@ def run_loop(
                 ensure_task_ids_present(gralph_dir)
                 task, prd_text = pick_task(gralph_dir, owner)
                 if task is None or not task.task_id:
-                    console.print("[red]Ready task is missing an id; run gralph fix-prd and retry.[/red]")
+                    console.print("[red]Ready task is missing an id.[/red]")
                     return False
 
             claimed, claimed_by = claim_task(
@@ -389,7 +276,6 @@ def run_loop(
                     reason=f"task_{task_status}",
                 )
             else:
-                # Renew lease if task remains pending for this owner.
                 claim_task(
                     gralph_dir,
                     task.task_id,
@@ -399,13 +285,13 @@ def run_loop(
 
             if completed:
                 console.print()
-                console.print(f"[bold green]✅ PRD complete after {iteration} iterations![/bold green]")
+                console.print(f"[bold green]PRD complete after {iteration} iterations![/bold green]")
                 end_counts = count_tasks((gralph_dir / "PRD.md").read_text())
                 _print_run_summary(start_counts, end_counts, iteration)
                 return True
 
         console.print()
-        console.print(f"[yellow]⚠️  Reached max iterations ({max_iterations}).[/yellow]")
+        console.print(f"[yellow]Reached max iterations ({max_iterations}).[/yellow]")
         console.print(f"Review {GRALPH_DIR}/PRD.md and run 'gralph run' again if needed.")
         end_counts = count_tasks((gralph_dir / "PRD.md").read_text())
         _print_run_summary(start_counts, end_counts, iteration)
