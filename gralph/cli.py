@@ -15,7 +15,7 @@ from gralph.utils.console import console, show_version, prompt_input
 from gralph.utils.paths import find_gralph_dir
 from gralph.utils.deps import REQUIRED_TOOLS
 from gralph.core.setup import core_setup, detect_stack
-from gralph.core.loop import run_loop
+from gralph.core.loop import run_loop, pick_task, check_prd_format, ensure_task_ids_present
 from gralph.core.cli_task_ops import (
     claim_by_id,
     ensure_unique_ids,
@@ -304,6 +304,108 @@ def run(
     show_version()
     
     if not run_loop(max_iterations, completion_promise, model, push=push, owner=owner):
+        raise typer.Exit(1)
+
+
+@app.command()
+def team(
+    task_id: Optional[str] = typer.Argument(None, help="Task ID (picks next ready if omitted)"),
+    model: str = typer.Option("sonnet", "--model", help="Claude model"),
+    owner: Optional[str] = typer.Option(None, "--owner", help="Claim owner identity"),
+):
+    """Run a single task using an interactive Claude agent team."""
+    import sys as _sys
+
+    from gralph.core.claims import (
+        DEFAULT_LEASE_SECONDS,
+        claim_task as _claim_task,
+        default_owner as _default_owner,
+        release_claim as _release_claim,
+    )
+    from gralph.core.docker import (
+        ensure_docker_available as _docker_ok,
+        ensure_image_exists as _image_ok,
+        ensure_volume_exists as _vol_ok,
+        check_container_auth as _auth_ok,
+        fix_volume_permissions as _fix_perms,
+    )
+    from gralph.core.prd import get_task_status_by_id as _status_by_id
+    from gralph.core.team import run_team_task
+
+    show_version()
+    gralph_dir = _require_gralph_dir()
+
+    if not check_prd_format(gralph_dir):
+        raise typer.Exit(1)
+
+    ensure_task_ids_present(gralph_dir)
+
+    if not _sys.stdin.isatty():
+        console.print("[red]Team mode requires an interactive terminal.[/red]")
+        raise typer.Exit(1)
+
+    # Docker checks
+    for check, msg in [
+        (_docker_ok, "Docker is not available."),
+        (_image_ok, "Failed to setup Docker sandbox."),
+        (_vol_ok, "Failed to create Docker volume."),
+    ]:
+        if not check():
+            console.print(f"[red]{msg}[/red]")
+            raise typer.Exit(1)
+
+    _fix_perms()
+
+    if not _auth_ok():
+        console.print("[yellow]Claude not authenticated in container.[/yellow]")
+        console.print("Run [bold]gralph auth[/bold] to authenticate.")
+        raise typer.Exit(1)
+
+    owner = owner or _default_owner()
+    project_dir = gralph_dir.parent
+
+    # Pick or locate task
+    if task_id:
+        from gralph.core.prd import find_task_by_id
+
+        prd_text = (gralph_dir / "PRD.md").read_text()
+        task = find_task_by_id(prd_text, task_id)
+        if not task:
+            console.print(f"[red]Task not found: {task_id}[/red]")
+            raise typer.Exit(1)
+    else:
+        task, _ = pick_task(gralph_dir, owner)
+        if task is None:
+            console.print("[yellow]No ready tasks available.[/yellow]")
+            raise typer.Exit(0)
+
+    # Claim
+    claimed, claimed_by = _claim_task(gralph_dir, task.task_id, owner=owner, lease_seconds=DEFAULT_LEASE_SECONDS)
+    if not claimed:
+        console.print(f"[yellow]Task {task.task_id} already claimed by {claimed_by}.[/yellow]")
+        raise typer.Exit(1)
+
+    console.print(f"[bold green]Team session[/bold green] for task [cyan]{task.task_id}[/cyan]")
+    console.print(f"[dim]{task.description}[/dim]")
+    console.print()
+
+    success = run_team_task(task, gralph_dir, project_dir, model)
+
+    # Post-session status check
+    updated_prd = (gralph_dir / "PRD.md").read_text()
+    task_status = _status_by_id(updated_prd, task.task_id)
+
+    if task_status in {"x", "~", "!"}:
+        _release_claim(gralph_dir, task.task_id, owner=owner, reason=f"task_{task_status}")
+        console.print(f"[green]Task {task.task_id} marked [{task_status}].[/green]")
+    else:
+        _release_claim(gralph_dir, task.task_id, owner=owner, reason="session_ended")
+        if success:
+            console.print(f"[yellow]Session exited 0 but task {task.task_id} still pending.[/yellow]")
+        else:
+            console.print(f"[red]Session failed. Task {task.task_id} remains pending.[/red]")
+
+    if not success:
         raise typer.Exit(1)
 
 

@@ -299,6 +299,50 @@ Output format rules:
 
 # ---------- Complexity heuristics ----------
 
+TEAM_PROMPT_TEMPLATE = _sub("""You are the lead agent for a gralph team session.
+
+## Your Task
+- Task ID: {task_id}
+- Description: {description}
+- Verification command: {verification}
+
+## Project Context
+{prompt_md}
+
+{memory_snapshot}
+
+## Directory Structure
+- `/workspace/` (or `.`) = PROJECT ROOT — all project code goes here
+- `/workspace/_PD_/` = GRALPH CONFIG — PRD.md, PROMPT.md, progress.txt
+- `/workspace/tests/` = TEST FILES
+
+## Package Management
+- Python: ALWAYS use `uv` (uv add, uv run, uv pip) — NEVER pip
+- JavaScript: ALWAYS use `bun` (bun add, bun run) — NEVER npm/yarn
+
+## Team Setup
+Create an agent team to implement this task. ALWAYS spawn these two roles:
+
+1. **implementer** — Writes the code changes for the task. Uses TDD where applicable.
+2. **tester** — Writes tests, runs the verification command, validates correctness.
+
+If the task warrants it (security-sensitive, complex logic, DB migrations, API design, performance-critical), spawn a 3rd specialist agent with an appropriate role. Simple tasks should use only 2 agents.
+
+## Coordination Flow
+1. Implementer writes the code
+2. Tester writes tests and runs verification command: `{verification}`
+3. If a specialist is present, they review their domain concern
+4. Fix any issues found
+5. When verification passes, update _PD_/PRD.md: change `- [ ]` to `- [x]` for task {task_id}
+6. Append one numbered learning to _PD_/progress.txt under ## Learnings
+7. Commit changes with a descriptive message
+
+## Important
+- Only work on task {task_id} — do not touch other tasks
+- Check existing files before creating new ones
+- Keep project code in the root, NOT inside _PD_/
+""")
+
 COMPLEXITY_RANGES: dict[str, dict[str, tuple[int, int]]] = {
     "S":  {"epics": (2, 3), "tasks_per_epic": (2, 3)},
     "M":  {"epics": (3, 5), "tasks_per_epic": (3, 5)},

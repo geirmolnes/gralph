@@ -192,6 +192,33 @@ def authenticate_container(image_name: str = "gralph-sandbox") -> bool:
     return check_container_auth(image_name)
 
 
+def run_claude_docker_interactive(
+    prompt: str,
+    model: str = "sonnet",
+    project_dir: Path | None = None,
+    image_name: str = "gralph-sandbox",
+) -> int:
+    """Run Claude interactively with agent teams enabled. Returns exit code."""
+    if project_dir is None:
+        project_dir = Path.cwd()
+
+    cmd = [
+        "docker", "run",
+        "--rm", "-it",
+        "-v", f"{project_dir.absolute()}:/workspace",
+        "-v", f"{VOLUME_NAME}:{CLAUDE_HOME}",
+        "-w", "/workspace",
+        "-e", "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1",
+        image_name,
+        "--dangerously-skip-permissions",
+        "--model", model,
+        "-p", prompt,
+    ]
+
+    result = subprocess.run(cmd)
+    return result.returncode
+
+
 def stream_claude_docker(
     prompt: str,
     completion_promise: str,

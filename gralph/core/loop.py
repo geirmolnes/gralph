@@ -47,7 +47,7 @@ def _extract_stack(prd_text: str) -> str:
     return match.group(1).strip() if match else "python"
 
 
-def _ensure_task_ids_present(gralph_dir: Path) -> None:
+def ensure_task_ids_present(gralph_dir: Path) -> None:
     """Guarantee all task lines have stable unique task IDs."""
     prd_path = gralph_dir / "PRD.md"
     prd_text = prd_path.read_text()
@@ -85,7 +85,7 @@ def _build_task_locked_prompt(
     )
 
 
-def _pick_task(
+def pick_task(
     gralph_dir: Path,
     owner: str,
 ) -> tuple[object | None, str]:
@@ -225,7 +225,7 @@ def _ensure_pending_tasks(gralph_dir: Path) -> bool:
     return _prompt_for_additional_tasks(gralph_dir)
 
 
-def _check_prd_format(gralph_dir: Path) -> bool:
+def check_prd_format(gralph_dir: Path) -> bool:
     """Validate PRD formatting before entering the execution loop."""
     prd_text = (gralph_dir / "PRD.md").read_text()
     errors = lint_prd(prd_text)
@@ -284,15 +284,15 @@ def run_loop(
         )
         return False
 
-    if not _check_prd_format(gralph_dir):
+    if not check_prd_format(gralph_dir):
         return False
 
-    _ensure_task_ids_present(gralph_dir)
+    ensure_task_ids_present(gralph_dir)
 
     if not _ensure_pending_tasks(gralph_dir):
         return True
 
-    _ensure_task_ids_present(gralph_dir)
+    ensure_task_ids_present(gralph_dir)
 
     start_counts = count_tasks((gralph_dir / "PRD.md").read_text())
 
@@ -333,7 +333,7 @@ def run_loop(
                 _print_run_summary(start_counts, end_counts, iteration)
                 return True
 
-            task, prd_text = _pick_task(gralph_dir, owner)
+            task, prd_text = pick_task(gralph_dir, owner)
             if task is None:
                 console.print(
                     "[yellow]No ready tasks are currently runnable (blocked by dependencies or claimed by another owner).[/yellow]"
@@ -343,8 +343,8 @@ def run_loop(
                 return False
 
             if not task.task_id:
-                _ensure_task_ids_present(gralph_dir)
-                task, prd_text = _pick_task(gralph_dir, owner)
+                ensure_task_ids_present(gralph_dir)
+                task, prd_text = pick_task(gralph_dir, owner)
                 if task is None or not task.task_id:
                     console.print("[red]Ready task is missing an id; run gralph fix-prd and retry.[/red]")
                     return False
