@@ -48,7 +48,7 @@ gralph run
 | Command | Description |
 |---------|-------------|
 | `gralph run [max]` | Run the Ralph loop (default: 20 iterations) |
-| `gralph team [id]` | Run a single task with an interactive Claude agent team |
+| `gralph team [max]` | Run the loop with Claude agent teams enabled |
 | `gralph status` | Show task progress counts |
 | `gralph tasks` | List all tasks with color-coded statuses |
 | `gralph ready` | Show runnable tasks (deps satisfied + unclaimed) |
@@ -59,8 +59,7 @@ gralph run
 - `--owner` — Claim owner identity for this run
 
 ### `gralph team`
-- `--model` — Claude model (default: sonnet)
-- `--owner` — Claim owner identity
+Same options as `run`. Enables Claude agent teams (multiple sub-agents per task).
 
 ## Project Structure
 
