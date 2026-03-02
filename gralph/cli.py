@@ -105,6 +105,33 @@ def tasks():
 
 
 @app.command()
+def auth():
+    """Authenticate Claude inside Docker container."""
+    from gralph.core.docker import (
+        ensure_docker_available,
+        ensure_image_exists,
+        ensure_volume_exists,
+        authenticate_container,
+    )
+
+    if not ensure_docker_available():
+        console.print("[red]Docker is not available.[/red]")
+        raise typer.Exit(1)
+
+    if not ensure_image_exists():
+        raise typer.Exit(1)
+
+    if not ensure_volume_exists():
+        raise typer.Exit(1)
+
+    if authenticate_container():
+        console.print("\n[green]Authentication successful![/green]")
+    else:
+        console.print("\n[red]Authentication failed.[/red]")
+        raise typer.Exit(1)
+
+
+@app.command()
 def version():
     """Show gralph version."""
     show_version()
