@@ -41,9 +41,16 @@ def find_gralph_dir() -> Path | None:
 
 
 def ensure_gralph_dir() -> Path:
-    """Create gralph/ dir with README if missing. Returns the path."""
+    """Create gralph/ dir with README if missing. Moves root PRD.md in if needed."""
     gralph_path = Path.cwd() / GRALPH_DIR
     gralph_path.mkdir(exist_ok=True)
+
+    # Move PRD.md from project root into gralph/ if not already there
+    root_prd = Path.cwd() / "PRD.md"
+    target_prd = gralph_path / "PRD.md"
+    if root_prd.exists() and not target_prd.exists():
+        root_prd.rename(target_prd)
+
     readme = gralph_path / "README.md"
     if not readme.exists():
         readme.write_text(_GRALPH_README)
